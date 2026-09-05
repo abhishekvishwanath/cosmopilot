@@ -39,7 +39,10 @@ class Settings(BaseSettings):
 
     @property
     def auth_configured(self) -> bool:
-        return bool(self.supabase_jwt_secret)
+        # JWKS verification (asymmetric signing keys) needs only the project
+        # URL; SUPABASE_JWT_SECRET is a fallback for projects still on the
+        # legacy HS256 shared secret. Either is enough to attempt auth.
+        return bool(self.supabase_url or self.supabase_jwt_secret)
 
 
 @lru_cache

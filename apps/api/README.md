@@ -40,7 +40,7 @@ app/
 ├── core/
 │   ├── config.py       # pydantic-settings Settings, read from .env
 │   ├── logging.py       # structured logging setup
-│   └── security.py       # Supabase JWT verification + get_current_user dependency
+│   └── security.py       # Supabase JWT verification (JWKS, HS256 fallback) + get_current_user
 ├── api/v1/
 │   ├── router.py          # aggregates all v1 routers
 │   ├── health.py            # /health (liveness), /health/ready (checks Supabase reachability)
@@ -51,10 +51,13 @@ app/
 │   # empty — populated starting Phase 2, per docs/ARCHITECTURE.md
 tests/
 ├── test_health.py
-└── test_auth.py
+├── test_auth.py
+├── test_db_supabase.py
+└── test_security_jwks.py
 ```
 
 ## Notes
 
 - Clinic-scoped authorization (matching a user to a `clinic_id`) is added in Phase 2 once the `clinics`/staff tables exist. `get_current_user` in Phase 1 only proves *who* the caller is via a valid Supabase JWT.
-- The `/health/ready` Supabase check hits PostgREST's root endpoint directly over HTTP rather than pulling in the full `supabase-py` SDK, since no application table exists yet — this keeps Phase 1's dependency footprint minimal.
+- JWT verification tries the project's JWKS endpoint first (`SUPABASE_URL` alone is enough — this is what current Supabase projects with asymmetric "JWT Signing Keys" require), falling back to `SUPABASE_JWT_SECRET` (HS256) only if no JWKS key matches, for older projects still on the legacy shared secret. Verified end-to-end against a real Supabase-issued token during Phase 1.
+- The `/health/ready` Supabase check hits PostgREST's root endpoint directly over HTTP rather than pulling in the full `supabase-py` SDK, since no application table exists yet — this keeps Phase 1's dependency footprint minimal. It prefers `SUPABASE_SERVICE_ROLE_KEY` when set, since PostgREST restricts this introspection endpoint to `service_role` and would otherwise report a false error for anon-key-only setups.
