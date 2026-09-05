@@ -38,6 +38,56 @@ export interface Treatment {
   status: string;
 }
 
+export interface PublicLocation {
+  id: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  phone: string | null;
+  opening_hours: Record<string, string> | null;
+  timezone: string | null;
+}
+
+export interface PublicClinic {
+  id: string;
+  name: string;
+  description: string | null;
+  website: string | null;
+  primary_phone: string | null;
+  email: string | null;
+  timezone: string;
+  locations: PublicLocation[];
+}
+
+export interface PublicDoctor {
+  id: string;
+  slug: string;
+  name: string;
+  title: string | null;
+  specialties: string[] | null;
+  credentials: string | null;
+  bio: string | null;
+  photo_url: string | null;
+}
+
+export interface TreatmentFaqItem {
+  q: string;
+  a: string;
+}
+
+export interface PublicTreatment {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  approved_information: string | null;
+  faq: TreatmentFaqItem[] | null;
+  price_guidance: string | null;
+  duration: string | null;
+  booking_enabled: boolean;
+}
+
 export interface Lead {
   id: string;
   clinic_id: string;

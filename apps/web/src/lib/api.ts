@@ -45,3 +45,31 @@ export async function apiFetch<T>(
   }
   return response.json() as Promise<T>;
 }
+
+/**
+ * Calls apps/api's unauthenticated /public/* routes — what the marketing
+ * site (apps/web/src/app/(site)) renders for anonymous visitors. Never use
+ * this for anything CRM/clinic-staff scoped; use apiFetch for that.
+ */
+export async function publicApiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_URL}/api/v1/public${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+    next: { revalidate: 60 },
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const error = body?.error;
+    throw new ApiError(
+      response.status,
+      error?.code ?? "unknown_error",
+      error?.message ?? `Request to ${path} failed with ${response.status}.`
+    );
+  }
+
+  return response.json() as Promise<T>;
+}

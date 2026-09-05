@@ -11,6 +11,13 @@ async def list_doctors(db: AsyncSession, clinic_id: uuid.UUID) -> list[Doctor]:
     return list(result.scalars().all())
 
 
+async def list_active_doctors(db: AsyncSession, clinic_id: uuid.UUID) -> list[Doctor]:
+    result = await db.execute(
+        select(Doctor).where(Doctor.clinic_id == clinic_id, Doctor.status == "active")
+    )
+    return list(result.scalars().all())
+
+
 async def get_doctor(db: AsyncSession, clinic_id: uuid.UUID, doctor_id: uuid.UUID) -> Doctor | None:
     result = await db.execute(
         select(Doctor).where(Doctor.id == doctor_id, Doctor.clinic_id == clinic_id)
@@ -34,6 +41,13 @@ async def update_doctor(db: AsyncSession, doctor: Doctor, data: dict) -> Doctor:
 
 async def list_treatments(db: AsyncSession, clinic_id: uuid.UUID) -> list[Treatment]:
     result = await db.execute(select(Treatment).where(Treatment.clinic_id == clinic_id))
+    return list(result.scalars().all())
+
+
+async def list_active_treatments(db: AsyncSession, clinic_id: uuid.UUID) -> list[Treatment]:
+    result = await db.execute(
+        select(Treatment).where(Treatment.clinic_id == clinic_id, Treatment.status == "active")
+    )
     return list(result.scalars().all())
 
 

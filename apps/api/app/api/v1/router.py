@@ -9,12 +9,14 @@ from app.api.v1 import (
     doctors,
     health,
     leads,
+    public,
     treatments,
 )
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(public.router)
 api_router.include_router(clinics.router)
 api_router.include_router(doctors.router)
 api_router.include_router(treatments.router)

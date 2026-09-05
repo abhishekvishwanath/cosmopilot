@@ -70,7 +70,18 @@ TREATMENTS: list[dict[str, Any]] = [
             "real clinic's claims."
         ),
         "faq": [
-            {"q": "How long do veneers last?", "a": "Demo answer: typically 10-15 years with care."}
+            {
+                "q": "How long do veneers last?",
+                "a": "Demo answer: typically 10-15 years with proper care.",
+            },
+            {
+                "q": "Is the procedure painful?",
+                "a": "Demo answer: minimal discomfort, local anesthesia used for prep.",
+            },
+            {
+                "q": "How many teeth can be treated?",
+                "a": "Demo answer: from a single tooth up to a full smile makeover.",
+            },
         ],
         "price_guidance": "Demo guidance: starting from AED 2,500 per tooth (illustrative only).",
         "duration": "2 visits, ~2-3 weeks",
@@ -81,7 +92,15 @@ TREATMENTS: list[dict[str, Any]] = [
         "description": "Clear aligner therapy for teeth straightening without metal braces.",
         "approved_information": "Demo/approved copy: treatment length varies by case complexity.",
         "faq": [
-            {"q": "Is it painful?", "a": "Demo answer: mild pressure for the first few days."}
+            {"q": "Is it painful?", "a": "Demo answer: mild pressure for the first few days."},
+            {
+                "q": "How often are check-ins needed?",
+                "a": "Demo answer: roughly every 6-8 weeks during treatment.",
+            },
+            {
+                "q": "Can I eat and drink normally?",
+                "a": "Demo answer: remove aligners for meals; water is fine while wearing them.",
+            },
         ],
         "price_guidance": "Demo guidance: starting from AED 9,000 (illustrative only).",
         "duration": "6-18 months",
@@ -92,7 +111,15 @@ TREATMENTS: list[dict[str, Any]] = [
         "description": "Titanium implant + crown to replace a missing tooth.",
         "approved_information": "Demo/approved copy: includes consultation, placement, and crown.",
         "faq": [
-            {"q": "Is the procedure safe?", "a": "Demo answer: routine, under local anesthesia."}
+            {"q": "Is the procedure safe?", "a": "Demo answer: routine, under local anesthesia."},
+            {
+                "q": "How long is recovery?",
+                "a": "Demo answer: initial healing ~1-2 weeks, full integration 3-6 months.",
+            },
+            {
+                "q": "Do implants look natural?",
+                "a": "Demo answer: crowns are shade-matched to surrounding teeth.",
+            },
         ],
         "price_guidance": "Demo guidance: starting from AED 4,500 per implant (illustrative only).",
         "duration": "3-6 months (including healing)",
@@ -103,7 +130,11 @@ TREATMENTS: list[dict[str, Any]] = [
         "description": "Combination treatment plan tailored to full smile aesthetics.",
         "approved_information": "Demo/approved copy: plan combines veneers, whitening, contouring.",
         "faq": [
-            {"q": "How many visits?", "a": "Demo answer: varies by combination chosen."}
+            {"q": "How many visits?", "a": "Demo answer: varies by combination chosen."},
+            {
+                "q": "Is a consultation required first?",
+                "a": "Demo answer: yes, plans are built around your goals and current smile.",
+            },
         ],
         "price_guidance": "Demo guidance: custom quote after consultation (illustrative only).",
         "duration": "Varies by plan",
@@ -114,7 +145,11 @@ TREATMENTS: list[dict[str, Any]] = [
         "description": "In-clinic professional whitening treatment.",
         "approved_information": "Demo/approved copy: single-session in-clinic whitening.",
         "faq": [
-            {"q": "How long do results last?", "a": "Demo answer: typically 6-12 months."}
+            {"q": "How long do results last?", "a": "Demo answer: typically 6-12 months."},
+            {
+                "q": "Is whitening safe for enamel?",
+                "a": "Demo answer: performed under supervision at a controlled concentration.",
+            },
         ],
         "price_guidance": "Demo guidance: starting from AED 800 (illustrative only).",
         "duration": "1 visit, ~60-90 minutes",
@@ -212,11 +247,14 @@ async def get_or_create_doctors(
     existing = {d.name: d for d in result.scalars().all()}
 
     for doc_data in DOCTORS:
-        if doc_data["name"] in existing:
-            continue
-        doctor = Doctor(clinic_id=clinic_id, status="active", **doc_data)
-        session.add(doctor)
-        existing[doc_data["name"]] = doctor
+        doctor = existing.get(doc_data["name"])
+        if doctor is None:
+            doctor = Doctor(clinic_id=clinic_id, status="active", **doc_data)
+            session.add(doctor)
+            existing[doc_data["name"]] = doctor
+        else:
+            for field, value in doc_data.items():
+                setattr(doctor, field, value)
     await session.flush()
     return existing
 
@@ -228,13 +266,16 @@ async def get_or_create_treatments(
     existing = {t.name: t for t in result.scalars().all()}
 
     for t_data in TREATMENTS:
-        if t_data["name"] in existing:
-            continue
-        treatment = Treatment(
-            clinic_id=clinic_id, status="active", booking_enabled=True, **t_data
-        )
-        session.add(treatment)
-        existing[t_data["name"]] = treatment
+        treatment = existing.get(t_data["name"])
+        if treatment is None:
+            treatment = Treatment(
+                clinic_id=clinic_id, status="active", booking_enabled=True, **t_data
+            )
+            session.add(treatment)
+            existing[t_data["name"]] = treatment
+        else:
+            for field, value in t_data.items():
+                setattr(treatment, field, value)
     await session.flush()
     return existing
 

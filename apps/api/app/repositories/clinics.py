@@ -10,6 +10,18 @@ async def get_clinic(db: AsyncSession, clinic_id: uuid.UUID) -> Clinic | None:
     return await db.get(Clinic, clinic_id)
 
 
+async def get_active_clinic(db: AsyncSession) -> Clinic | None:
+    """
+    The public marketing site is single-tenant for now — one clinic is
+    live at a time (CosmoPilot's current demo scope). This becomes a
+    lookup by domain/slug once multiple clinics need public sites.
+    """
+    result = await db.execute(
+        select(Clinic).where(Clinic.status == "active").order_by(Clinic.created_at).limit(1)
+    )
+    return result.scalars().first()
+
+
 async def update_clinic(db: AsyncSession, clinic: Clinic, data: dict) -> Clinic:
     for field, value in data.items():
         setattr(clinic, field, value)

@@ -10,6 +10,20 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-serif);
+
+  /* Premium marketing-site palette (apps/web/src/app/(site)) — deliberately
+     fixed/light regardless of system color scheme, unlike --background /
+     --foreground above which the CRM and utility pages still follow. */
+  --color-ivory: #faf7f2;
+  --color-ivory-soft: #f2ebdd;
+  --color-charcoal: #201e1b;
+  --color-charcoal-soft: #5b564d;
+  --color-gold: #b1874f;
+  --color-gold-dark: #8f6c3c;
+  --color-gold-soft: #ecdfc2;
+  --color-emerald: #163a37;
+  --color-emerald-soft: #e2ebe7;
 }
 
 @media (prefers-color-scheme: dark) {
