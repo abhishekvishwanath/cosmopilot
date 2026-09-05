@@ -13,13 +13,19 @@ dev-web:
 dev-api:
 	cd apps/api && .venv/bin/uvicorn app.main:app --reload --port 8000
 
+migrate:
+	cd apps/api && .venv/bin/alembic upgrade head
+
+seed:
+	cd apps/api && .venv/bin/python scripts/seed_demo_clinic.py
+
 lint:
 	npm run web:lint
 	cd apps/api && .venv/bin/ruff check .
 
 typecheck:
 	npm run web:typecheck
-	cd apps/api && .venv/bin/mypy app tests
+	cd apps/api && .venv/bin/mypy app tests scripts
 
 test:
 	npm run web:test

@@ -1,10 +1,16 @@
+import uuid
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
+from app.db.session import get_db
+from app.models.clinic import ClinicStaff
 
 
 class AuthError(HTTPException):
@@ -105,3 +111,47 @@ def get_current_user(
     """
     token = _extract_bearer_token(authorization)
     return decode_supabase_jwt(token, settings)
+
+
+@dataclass(frozen=True)
+class ClinicPrincipal:
+    """The authenticated caller, resolved to a specific clinic via
+    `clinic_staff` — this is what every clinic-scoped route depends on."""
+
+    user_id: uuid.UUID
+    email: str | None
+    clinic_id: uuid.UUID
+    role: str
+
+
+async def get_current_clinic_staff(
+    user: Annotated[dict[str, Any], Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ClinicPrincipal:
+    """
+    Resolves the JWT-authenticated user to the clinic they're staff of.
+    This is the clinic-scoped authorization CLAUDE.md §23 requires — every
+    clinic-scoped route depends on this instead of a bare authenticated
+    user, so a request can never act on a clinic the caller doesn't belong
+    to (defense in depth alongside the RLS policies in the migrations).
+
+    A prototype user belongs to exactly one clinic; multi-clinic staff
+    accounts are out of scope until a real need for them shows up.
+    """
+    try:
+        user_id = uuid.UUID(str(user.get("sub")))
+    except (ValueError, TypeError) as exc:
+        raise AuthError("invalid_token", "Token subject is not a valid user id.") from exc
+
+    result = await db.execute(select(ClinicStaff).where(ClinicStaff.user_id == user_id))
+    staff = result.scalars().first()
+    if staff is None:
+        raise AuthError(
+            "no_clinic_access",
+            "This account is not linked to any clinic.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    return ClinicPrincipal(
+        user_id=user_id, email=user.get("email"), clinic_id=staff.clinic_id, role=staff.role
+    )

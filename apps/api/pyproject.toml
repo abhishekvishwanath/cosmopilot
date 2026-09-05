@@ -1,6 +1,9 @@
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Generated once, run once, never hand-edited again after review — excluded
+# from lint the same way most Alembic setups exclude versions/.
+extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -11,6 +14,7 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
+exclude = ["alembic/versions"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
