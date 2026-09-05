@@ -12,21 +12,25 @@ class _Bucket:
         self.hits: deque[float] = deque()
 
 
-_buckets: dict[str, _Bucket] = defaultdict(_Bucket)
-
-
 def rate_limit(max_requests: int, window_seconds: int) -> Callable[[Request], Awaitable[None]]:
     """
     Per-IP fixed-window limiter for public, unauthenticated endpoints
     (CLAUDE.md §23/§28). In-process memory only — fine for a single API
     instance; swap for a Redis-backed limiter (docs/PROVIDER_INTERFACES.md)
     before running multiple replicas, since counts don't share across them.
+
+    Each call to rate_limit() owns its own bucket store — a route with both
+    a router-wide limit and a stricter per-route limit applied on top (see
+    api/v1/public.py's /leads) must track them independently, not share one
+    global counter per IP that every distinct policy would otherwise stomp
+    on.
     """
+    buckets: dict[str, _Bucket] = defaultdict(_Bucket)
 
     async def _dependency(request: Request) -> None:
         client_ip = request.client.host if request.client else "unknown"
         now = time.monotonic()
-        bucket = _buckets[client_ip]
+        bucket = buckets[client_ip]
         while bucket.hits and now - bucket.hits[0] > window_seconds:
             bucket.hits.popleft()
         if len(bucket.hits) >= max_requests:

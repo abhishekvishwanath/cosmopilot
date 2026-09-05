@@ -88,6 +88,25 @@ export interface PublicTreatment {
   booking_enabled: boolean;
 }
 
+export interface PublicLeadCreate {
+  name: string;
+  phone: string;
+  email?: string | null;
+  treatment_id?: string | null;
+  preferred_time?: string | null;
+  contact_method?: "Call" | "WhatsApp" | "Email" | null;
+  consent: boolean;
+  source?: string | null;
+  campaign?: string | null;
+  landing_page?: string | null;
+  anonymous_id?: string | null;
+}
+
+export interface PublicLeadResult {
+  id: string;
+  status: string;
+}
+
 export interface Lead {
   id: string;
   clinic_id: string;

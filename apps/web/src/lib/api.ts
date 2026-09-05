@@ -47,6 +47,30 @@ export async function apiFetch<T>(
 }
 
 /**
+ * POSTs to apps/api's unauthenticated /public/* routes (e.g. the enquiry
+ * form). Never cached — publicApiFetch's `revalidate` is a GET-only concern.
+ */
+export async function publicApiPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}/api/v1/public${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const responseBody = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = responseBody?.error;
+    throw new ApiError(
+      response.status,
+      error?.code ?? "unknown_error",
+      error?.message ?? `Request to ${path} failed with ${response.status}.`
+    );
+  }
+  return responseBody as T;
+}
+
+/**
  * Calls apps/api's unauthenticated /public/* routes — what the marketing
  * site (apps/web/src/app/(site)) renders for anonymous visitors. Never use
  * this for anything CRM/clinic-staff scoped; use apiFetch for that.

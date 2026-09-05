@@ -8,13 +8,19 @@ from app.db.session import get_db
 from app.models.catalog import Doctor, Treatment
 from app.repositories import catalog as catalog_repo
 from app.repositories import clinics as clinics_repo
+from app.repositories import visitor_sessions as visitor_sessions_repo
 from app.schemas.public import (
     PublicClinicRead,
     PublicDoctorRead,
+    PublicLeadCreate,
+    PublicLeadRead,
     PublicLocationRead,
     PublicTreatmentRead,
 )
+from app.services import leads as leads_service
+from app.services import notifications as notifications_service
 from app.utils.slugify import slugify
+from app.utils.validation import has_min_digits
 
 # Unauthenticated by design — this is what the marketing site renders for
 # anonymous visitors (CLAUDE.md §28: minimal, rate-limited, never leaks
@@ -31,6 +37,13 @@ def _not_found(what: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail={"error": {"code": "not_found", "message": f"{what} not found.", "details": {}}},
+    )
+
+
+def _validation_error(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail={"error": {"code": code, "message": message, "details": {}}},
     )
 
 
@@ -126,3 +139,73 @@ async def get_public_treatment(
             if slugify(treatment.name) == slug:
                 return _treatment_to_public(treatment)
     raise _not_found("Treatment")
+
+
+# Enquiry-form submissions are higher-value spam/abuse targets than a read
+# endpoint — a tighter limit than the router-wide 60/min applies on top of
+# it (both dependencies run; whichever trips first wins).
+@router.post(
+    "/leads",
+    response_model=PublicLeadRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=600))],
+)
+async def create_public_lead(
+    payload: PublicLeadCreate, db: Annotated[AsyncSession, Depends(get_db)]
+) -> PublicLeadRead:
+    if not payload.consent:
+        raise _validation_error(
+            "consent_required", "Consent is required so we can contact you about your enquiry."
+        )
+    if not has_min_digits(payload.phone, 7):
+        raise _validation_error("invalid_phone", "Please enter a valid phone number.")
+
+    clinic = await clinics_repo.get_active_clinic(db)
+    if clinic is None:
+        raise _not_found("Clinic")
+
+    treatment: Treatment | None = None
+    if payload.treatment_id is not None:
+        treatment = await catalog_repo.get_treatment(db, clinic.id, payload.treatment_id)
+        if treatment is None or treatment.status != "active":
+            raise _validation_error(
+                "invalid_treatment", "The selected treatment is not currently available."
+            )
+
+    lead = await leads_service.create_lead(
+        db,
+        clinic.id,
+        {
+            "name": payload.name.strip(),
+            "phone": payload.phone.strip(),
+            "email": payload.email,
+            "whatsapp": payload.phone.strip() if payload.contact_method == "WhatsApp" else None,
+            "treatment_id": treatment.id if treatment else None,
+            "source": payload.source or "website",
+            "landing_page": payload.landing_page,
+            "preferred_time": payload.preferred_time,
+            "consent": True,
+        },
+        event_metadata={
+            "contact_method": payload.contact_method,
+            "campaign": payload.campaign,
+            "anonymous_id": payload.anonymous_id,
+        },
+    )
+
+    await visitor_sessions_repo.create_visitor_session(
+        db,
+        clinic_id=clinic.id,
+        treatment_id=treatment.id if treatment else None,
+        source=payload.source,
+        campaign=payload.campaign,
+        landing_page=payload.landing_page,
+        anonymous_id=payload.anonymous_id,
+    )
+
+    await notifications_service.notify_clinic_of_new_lead(
+        db, clinic, lead, treatment.name if treatment else None
+    )
+
+    await db.commit()
+    return PublicLeadRead(id=lead.id, status=lead.status)

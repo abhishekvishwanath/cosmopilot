@@ -1,6 +1,11 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState } from "react";
+
+import { ApiError, publicApiPost } from "@/lib/api";
+import { getAttribution, getOrCreateAnonymousId } from "@/lib/tracking";
+import type { PublicLeadCreate, PublicLeadResult } from "@/lib/types";
 
 const CONTACT_METHODS = ["Call", "WhatsApp", "Email"] as const;
 
@@ -36,12 +41,15 @@ export function AppointmentForm({
   treatments: TreatmentOption[];
   defaultTreatmentId?: string;
 }) {
+  const pathname = usePathname();
   const [form, setForm] = useState<FormState>({
     ...EMPTY_FORM,
     treatmentId: defaultTreatmentId ?? "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [result, setResult] = useState<PublicLeadResult | null>(null);
 
   function validate(): boolean {
     const next: Partial<Record<keyof FormState, string>> = {};
@@ -52,16 +60,42 @@ export function AppointmentForm({
     return Object.keys(next).length === 0;
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setSubmitError(null);
     if (!validate()) return;
-    // Demo mode: no lead is created yet — the live Lead API, consent
-    // logging, and CRM attribution land in Phase 4 (CLAUDE.md phase plan).
-    // This UI is fully validated and ready to wire up to it.
-    setSubmitted(true);
+
+    setSubmitting(true);
+    const attribution = getAttribution();
+    const payload: PublicLeadCreate = {
+      name: form.name.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim() || null,
+      treatment_id: form.treatmentId || null,
+      preferred_time: form.preferredTime.trim() || null,
+      contact_method: form.contactMethod,
+      consent: form.consent,
+      source: attribution.source ?? "website",
+      campaign: attribution.campaign,
+      landing_page: pathname,
+      anonymous_id: getOrCreateAnonymousId(),
+    };
+
+    try {
+      const created = await publicApiPost<PublicLeadResult>("/leads", payload);
+      setResult(created);
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError
+          ? error.message
+          : "Something went wrong sending your enquiry. Please try WhatsApp instead."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  if (submitted) {
+  if (result) {
     return (
       <div className="rounded-2xl border border-gold bg-gold-soft/40 p-8 text-center">
         <h3 className="font-serif text-2xl text-charcoal">Thank you, {form.name.split(" ")[0]}.</h3>
@@ -69,15 +103,11 @@ export function AppointmentForm({
           We&apos;ve got your enquiry. Our team (or your AI concierge, once it&apos;s connected)
           will reach out shortly.
         </p>
-        <p className="mt-4 text-xs text-charcoal-soft/70">
-          Demo mode — this form doesn&apos;t create a real lead yet. Live booking connects in
-          the next build phase.
-        </p>
         <button
           type="button"
           onClick={() => {
             setForm({ ...EMPTY_FORM, treatmentId: defaultTreatmentId ?? "" });
-            setSubmitted(false);
+            setResult(null);
           }}
           className="mt-5 text-sm font-medium text-gold-dark hover:underline"
         >
@@ -199,15 +229,17 @@ export function AppointmentForm({
         {errors.consent && <p className="mt-1 text-xs text-red-600">{errors.consent}</p>}
       </div>
 
+      {submitError && (
+        <p className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{submitError}</p>
+      )}
+
       <button
         type="submit"
-        className="w-full rounded-full bg-charcoal px-6 py-3 text-sm font-medium text-ivory transition-colors hover:bg-emerald"
+        disabled={submitting}
+        className="w-full rounded-full bg-charcoal px-6 py-3 text-sm font-medium text-ivory transition-colors hover:bg-emerald disabled:cursor-not-allowed disabled:opacity-60"
       >
-        Request a consultation
+        {submitting ? "Sending..." : "Request a consultation"}
       </button>
-      <p className="text-center text-xs text-charcoal-soft/70">
-        Demo mode — this form doesn&apos;t send data to the CRM yet.
-      </p>
     </form>
   );
 }

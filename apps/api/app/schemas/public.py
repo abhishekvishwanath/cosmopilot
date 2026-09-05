@@ -1,6 +1,7 @@
 import uuid
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PublicLocationRead(BaseModel):
@@ -48,3 +49,29 @@ class PublicTreatmentRead(BaseModel):
     price_guidance: str | None = None
     duration: str | None = None
     booking_enabled: bool
+
+
+class PublicLeadCreate(BaseModel):
+    """
+    Enquiry-form intake (CLAUDE.md §13). Deliberately narrower than
+    LeadCreate (schemas/lead.py) — `consent` is required (not defaulted),
+    and it accepts the attribution/contact-preference fields the public
+    form collects that a CRM staff member wouldn't need to supply by hand.
+    """
+
+    name: str = Field(min_length=2, max_length=200)
+    phone: str = Field(min_length=7, max_length=50)
+    email: str | None = None
+    treatment_id: uuid.UUID | None = None
+    preferred_time: str | None = Field(default=None, max_length=200)
+    contact_method: Literal["Call", "WhatsApp", "Email"] | None = None
+    consent: bool
+    source: str | None = Field(default=None, max_length=100)
+    campaign: str | None = Field(default=None, max_length=200)
+    landing_page: str | None = Field(default=None, max_length=500)
+    anonymous_id: str | None = Field(default=None, max_length=100)
+
+
+class PublicLeadRead(BaseModel):
+    id: uuid.UUID
+    status: str

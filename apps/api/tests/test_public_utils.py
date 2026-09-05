@@ -4,6 +4,7 @@ from starlette.requests import Request
 
 from app.core.rate_limit import rate_limit
 from app.utils.slugify import slugify
+from app.utils.validation import has_min_digits
 
 
 def test_slugify_basic() -> None:
@@ -16,6 +17,18 @@ def test_slugify_strips_punctuation_and_repeats_dashes() -> None:
 
 def test_slugify_trims_leading_trailing_dashes() -> None:
     assert slugify("  --Teeth Whitening--  ") == "teeth-whitening"
+
+
+def test_has_min_digits_accepts_formatted_phone_numbers() -> None:
+    assert has_min_digits("+971 50 123 4567", 7) is True
+
+
+def test_has_min_digits_rejects_too_short() -> None:
+    assert has_min_digits("+971 5", 7) is False
+
+
+def test_has_min_digits_ignores_non_digit_characters() -> None:
+    assert has_min_digits("!!!!!!!", 1) is False
 
 
 def _make_request(client_host: str = "1.2.3.4") -> Request:

@@ -14,12 +14,18 @@ def _validation_error(message: str) -> HTTPException:
     )
 
 
-async def create_lead(db: AsyncSession, clinic_id: uuid.UUID, data: dict) -> Lead:
+async def create_lead(
+    db: AsyncSession, clinic_id: uuid.UUID, data: dict, event_metadata: dict | None = None
+) -> Lead:
     """
     Creates a lead and records the funnel event that starts it — CLAUDE.md
     §22's Discovery -> Landing Page Visit -> Enquiry -> Lead funnel begins
     here. If consent was granted on submission, it's logged as an auditable
     Consent row, not just the summary boolean on the lead (CLAUDE.md §23).
+
+    `event_metadata` carries details that don't have their own lead column
+    (e.g. preferred contact method, campaign, anonymous_id) onto the
+    `lead_created` event so they're still visible in the CRM timeline.
     """
     consent_granted = data.get("consent", False)
     lead = Lead(clinic_id=clinic_id, **data)
@@ -43,6 +49,7 @@ async def create_lead(db: AsyncSession, clinic_id: uuid.UUID, data: dict) -> Lea
         event_type="lead_created",
         source=data.get("source"),
         lead_id=lead.id,
+        metadata=event_metadata,
     )
     await db.flush()
     return lead
