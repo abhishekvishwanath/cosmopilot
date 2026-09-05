@@ -32,6 +32,7 @@ from app.models.clinic import Clinic, ClinicLocation, ClinicStaff  # noqa: E402
 from app.models.lead import Lead  # noqa: E402
 from app.repositories import appointments as appointments_repo  # noqa: E402
 from app.repositories import events as events_repo  # noqa: E402
+from app.services import knowledge as knowledge_service  # noqa: E402
 
 CLINIC_NAME = "Cosmo Dental Dubai"
 
@@ -414,9 +415,14 @@ async def main() -> None:
         if args.grant_access:
             await grant_clinic_access(session, clinic.id, args.grant_access)
 
+        chunks = await knowledge_service.sync_clinic_knowledge(session, clinic.id)
+
         await session.commit()
 
-    print(f"Seeded '{CLINIC_NAME}' — {len(doctors)} doctors, {len(treatments)} treatments.")
+    print(
+        f"Seeded '{CLINIC_NAME}' — {len(doctors)} doctors, {len(treatments)} treatments, "
+        f"{chunks} knowledge chunks embedded."
+    )
 
 
 if __name__ == "__main__":

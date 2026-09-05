@@ -8,6 +8,7 @@ from app.api.v1 import (
     conversations,
     doctors,
     health,
+    knowledge,
     leads,
     public,
     treatments,
@@ -24,6 +25,7 @@ api_router.include_router(leads.router)
 api_router.include_router(appointments.router)
 api_router.include_router(conversations.router)
 api_router.include_router(analytics.router)
+api_router.include_router(knowledge.router)
 
-# knowledge, integrations, webhooks (see docs/API_CONVENTIONS.md) are added
-# starting Phase 5+, once the underlying features exist.
+# integrations, webhooks (see docs/API_CONVENTIONS.md) are added starting
+# Phase 6+, once the underlying features exist.

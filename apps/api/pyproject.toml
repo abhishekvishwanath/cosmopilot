@@ -9,7 +9,16 @@ extend-exclude = ["alembic/versions"]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
-python_version = "3.11"
+# Deliberately ahead of docker/api.Dockerfile's runtime (3.11) — numpy
+# (pulled in transitively by fastembed, Phase 5) ships stub files using
+# Python 3.12+ syntax (PEP 695 type statements), which mypy must be able
+# to parse regardless of what version the app itself targets. Raising
+# this doesn't let our own code use 3.12+ syntax by accident — mypy only
+# flags version-gated syntax we actually write, and we don't write any;
+# it only changes what mypy itself is able to read. `follow_imports =
+# "skip"` alone doesn't prevent this: it's a fatal parse error during
+# dependency resolution, before overrides get a chance to apply.
+python_version = "3.12"
 warn_unused_ignores = true
 warn_redundant_casts = true
 disallow_untyped_defs = true

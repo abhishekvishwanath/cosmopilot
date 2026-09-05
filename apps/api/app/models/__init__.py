@@ -3,7 +3,9 @@ from app.models.base import Base
 from app.models.catalog import Doctor, Treatment
 from app.models.clinic import Clinic, ClinicLocation, ClinicStaff
 from app.models.conversation import Conversation, Message
+from app.models.document import Document
 from app.models.event import Event
+from app.models.knowledge_chunk import KnowledgeChunk
 from app.models.lead import Consent, Lead
 from app.models.visitor_session import VisitorSession
 
@@ -22,4 +24,6 @@ __all__ = [
     "AppointmentEvent",
     "Event",
     "VisitorSession",
+    "Document",
+    "KnowledgeChunk",
 ]

@@ -44,6 +44,16 @@ class Settings(BaseSettings):
         # legacy HS256 shared secret. Either is enough to attempt auth.
         return bool(self.supabase_url or self.supabase_jwt_secret)
 
+    # AI knowledge base (Phase 5) — free/local by default per project
+    # decision: bge-small-en-v1.5 via fastembed for embeddings, a local
+    # Ollama model for grounded-answer generation. Both run with no API
+    # key; "mock" is available for tests/CI where neither dependency is
+    # installed or running.
+    embedding_provider: Literal["fastembed", "mock"] = "fastembed"
+    llm_provider: Literal["ollama", "mock"] = "ollama"
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -88,6 +88,29 @@ export interface PublicTreatment {
   booking_enabled: boolean;
 }
 
+export interface KnowledgeDocument {
+  id: string;
+  clinic_id: string;
+  type: string;
+  title: string;
+  embedding_status: string;
+  created_at: string;
+}
+
+export interface KnowledgeSource {
+  title: string | null;
+  source_type: string;
+  similarity: number;
+  excerpt: string;
+}
+
+export interface KnowledgeAnswer {
+  answer: string;
+  grounded: boolean;
+  generated: boolean;
+  sources: KnowledgeSource[];
+}
+
 export interface PublicLeadCreate {
   name: string;
   phone: string;
