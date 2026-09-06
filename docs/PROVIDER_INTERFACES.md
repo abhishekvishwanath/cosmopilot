@@ -6,8 +6,8 @@ CLAUDE.md §5.6, §26 and §27 require every external service to sit behind an i
 |---|---|---|
 | `CalendarProvider` | Phase 7 | Later, once a clinic's real PMS/calendar is identified (CLAUDE.md §32 — never invented ahead of time) |
 | `LLMProvider` | Phase 6 (or mock-only if no key yet) | Phase 5/6, once an AI provider key is supplied |
-| `VoiceProvider` | Phase 6 (mock) | Phase 10 (Vapi) |
-| `WhatsAppProvider` | Phase 6/8 (mock) | Phase 9 (Meta WhatsApp Cloud API) |
+| `VoiceProvider` | Phase 8 (mock) — Phase 6 only needed the text-channel Concierge | Phase 10 (Vapi) |
+| `WhatsAppProvider` | Phase 8 (mock) | Phase 9 (Meta WhatsApp Cloud API) |
 | `PaymentProvider` | Only if payments are needed | Phase 9+/on demand (Stripe test mode) |
 | `EmailProvider` | Phase 4 (mock) | Whenever Resend key is supplied |
 

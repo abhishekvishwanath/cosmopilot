@@ -1,0 +1,177 @@
+{
+  "name": "CosmoPilot C/E — Appointment Status Changed",
+  "nodes": [
+    {
+      "id": "webhook-appointment-status-changed",
+      "name": "Appointment Status Changed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointment.status_changed",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "if-is-booked",
+      "name": "Is Booked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c-booked",
+              "leftValue": "={{ $json.body.to_status }}",
+              "rightValue": "booked",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-notify-clinic",
+      "name": "Notify Clinic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [440, -140],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/appointments/{{ $json.body.appointment_id }}/notify-clinic",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "http-send-confirmation",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [660, -140],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/appointments/{{ $('Appointment Status Changed').item.json.body.appointment_id }}/confirmation",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $('Appointment Status Changed').item.json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "if-is-no-show",
+      "name": "Is No-Show?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 140],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c-no-show",
+              "leftValue": "={{ $json.body.to_status }}",
+              "rightValue": "no_show",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-no-show-followup",
+      "name": "Send No-Show Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [660, 140],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/appointments/{{ $json.body.appointment_id }}/no-show-followup",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "noop-ignored",
+      "name": "Ignored",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 260],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Appointment Status Changed": { "main": [[{ "node": "Is Booked?", "type": "main", "index": 0 }]] },
+    "Is Booked?": {
+      "main": [
+        [{ "node": "Notify Clinic", "type": "main", "index": 0 }],
+        [{ "node": "Is No-Show?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Notify Clinic": { "main": [[{ "node": "Send Confirmation", "type": "main", "index": 0 }]] },
+    "Is No-Show?": {
+      "main": [
+        [{ "node": "Send No-Show Follow-up", "type": "main", "index": 0 }],
+        [{ "node": "Ignored", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "CLAUDE.md §17 Workflows D + F, combined into one n8n workflow: both react to FastAPI's single generic appointment.status_changed event (app/services/appointments.py's transition_appointment_status is the one choke point for every appointment status change), and a real n8n instance can only register one webhook per path — so rather than two workflows racing for the same path, this one branches on to_status. 'booked' -> notify clinic + confirm with patient. 'no_show' -> mocked rescheduling message (CLAUDE.md's own no-show workflow reacts to an already-recorded no-show — nothing here auto-detects one). Any other transition (confirmed, completed, cancelled) is a no-op for now. Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET — see workflows/n8n/README.md."
+  }
+}

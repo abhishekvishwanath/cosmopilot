@@ -66,6 +66,21 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
 
+    # n8n automation (Phase 8) — n8n is the orchestration layer for
+    # webhooks/delays/branching/notifications (CLAUDE.md §6); core
+    # application state stays in FastAPI/Postgres. `n8n_webhook_base_url`
+    # is where FastAPI pushes outbound events (lead.created,
+    # appointment.status_changed) as n8n Webhook-trigger URLs; n8n's own
+    # HTTP Request nodes call back into `/api/v1/webhooks/n8n/*`,
+    # authenticated by `n8n_webhook_shared_secret` (a static shared secret
+    # header — n8n's HTTP Request node doesn't do request signing the way
+    # Meta/Stripe webhooks do, so this is the pragmatic equivalent CLAUDE.md
+    # §24 asks for at this trust boundary). Both unset means n8n isn't
+    # wired up yet — outbound dispatch is skipped, never blocking the
+    # request it's attached to (CLAUDE.md §25).
+    n8n_webhook_base_url: str | None = None
+    n8n_webhook_shared_secret: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

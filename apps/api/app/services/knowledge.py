@@ -10,7 +10,7 @@ from app.models.catalog import Doctor, Treatment
 from app.models.clinic import Clinic, ClinicLocation
 from app.providers.embeddings import get_embedding_provider
 from app.providers.llm import get_llm_provider
-from app.providers.llm.ollama import OllamaError
+from app.providers.llm.base import LLMProviderError
 from app.repositories import knowledge as knowledge_repo
 from app.utils.chunking import chunk_text
 
@@ -337,7 +337,7 @@ async def answer_from_knowledge(
         return KnowledgeAnswer(
             answer=response.text, grounded=True, generated=True, sources=used_sources
         )
-    except OllamaError as exc:
+    except LLMProviderError as exc:
         log_with_fields(
             logger,
             logging.WARNING,

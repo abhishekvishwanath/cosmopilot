@@ -9,7 +9,7 @@ from app.core.logging import log_with_fields
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.catalog import Doctor, Treatment
-from app.providers.llm.ollama import OllamaError
+from app.providers.llm.base import LLMProviderError
 from app.repositories import catalog as catalog_repo
 from app.repositories import clinics as clinics_repo
 from app.repositories import leads as leads_repo
@@ -29,6 +29,7 @@ from app.schemas.public import (
 )
 from app.services import leads as leads_service
 from app.services import notifications as notifications_service
+from app.services.n8n import notify_lead_created
 from app.utils.slugify import slugify
 from app.utils.validation import has_min_digits
 
@@ -220,6 +221,10 @@ async def create_public_lead(
     )
 
     await db.commit()
+    # CLAUDE.md §13/§14 — this is what actually starts the ~60-second
+    # automated response promise: n8n's "new lead" workflow picks this up
+    # and triggers the AI contact attempt (CLAUDE.md §17 Workflow A).
+    await notify_lead_created(lead.id, clinic.id)
     return PublicLeadRead(id=lead.id, status=lead.status)
 
 
@@ -259,7 +264,7 @@ async def send_public_concierge_message(
     try:
         await concierge_agent.summarize_conversation(db, conversation)
         await db.commit()
-    except OllamaError:
+    except LLMProviderError:
         log_with_fields(
             logger,
             logging.WARNING,

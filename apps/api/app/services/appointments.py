@@ -14,6 +14,7 @@ from app.repositories import clinics as clinics_repo
 from app.repositories import events as events_repo
 from app.schemas.appointment import APPOINTMENT_STATUSES
 from app.services.leads import transition_lead_status
+from app.services.n8n import notify_appointment_status_changed
 
 # The prototype books a fixed-length slot regardless of treatment — none of
 # CLAUDE.md's data model fields for Treatment are a structured duration
@@ -106,6 +107,19 @@ async def transition_appointment_status(
         await transition_lead_status(db, lead, mapped_lead_status)
 
     await db.flush()
+
+    # Fire-and-forget: n8n reacts to whichever transitions its workflows
+    # care about (booked -> notify clinic + confirm; no_show -> recovery
+    # message). This is the single choke point for every appointment
+    # status change (CLAUDE.md's own docstring above), so it's the right
+    # place to notify regardless of which caller changed the status.
+    await notify_appointment_status_changed(
+        appointment_id=appointment.id,
+        lead_id=appointment.lead_id,
+        clinic_id=appointment.clinic_id,
+        from_status=previous_status,
+        to_status=new_status,
+    )
     return appointment
 
 

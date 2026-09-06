@@ -13,6 +13,7 @@ from app.api.v1 import (
     leads,
     public,
     treatments,
+    webhooks,
 )
 
 api_router = APIRouter()
@@ -28,6 +29,8 @@ api_router.include_router(conversations.router)
 api_router.include_router(analytics.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(concierge.router)
+api_router.include_router(webhooks.router)
 
-# integrations, webhooks (see docs/API_CONVENTIONS.md) are added starting
-# Phase 8+, once the underlying features exist.
+# integrations (see docs/API_CONVENTIONS.md) are added once a real
+# provider integration (Meta WhatsApp, Vapi, Stripe) needs its own
+# inbound webhook — n8n's are covered by webhooks.router above.

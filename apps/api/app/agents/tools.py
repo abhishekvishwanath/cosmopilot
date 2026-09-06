@@ -30,6 +30,7 @@ from app.repositories import leads as leads_repo
 from app.services import appointments as appointments_service
 from app.services import knowledge as knowledge_service
 from app.services import leads as leads_service
+from app.services.n8n import notify_lead_created
 
 
 @dataclass
@@ -175,6 +176,7 @@ async def create_lead(
         },
     )
     ctx.lead = lead
+    await notify_lead_created(lead.id, ctx.clinic_id)
     return {"lead_id": str(lead.id), "status": lead.status, "already_existed": False}
 
 

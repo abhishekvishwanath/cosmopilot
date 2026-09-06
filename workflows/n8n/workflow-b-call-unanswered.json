@@ -1,0 +1,130 @@
+{
+  "name": "CosmoPilot B — Call Unanswered",
+  "nodes": [
+    {
+      "id": "webhook-call-unanswered",
+      "name": "Call Unanswered",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "call.unanswered",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "wait-before-followup",
+      "name": "Wait Before Follow-up",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [220, 0],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 5,
+        "unit": "minutes"
+      }
+    },
+    {
+      "id": "http-recheck-status",
+      "name": "Recheck Lead Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [440, 0],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/leads/{{ $json.body.lead_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "if-still-no-answer",
+      "name": "Still Unreached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [660, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c-no-answer",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "NO_ANSWER",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-whatsapp-followup",
+      "name": "Send WhatsApp Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [880, -100],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/leads/{{ $json.lead_id }}/whatsapp-followup",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $('Call Unanswered').item.json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "noop-resolved",
+      "name": "Resolved Another Way",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 100],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Call Unanswered": { "main": [[{ "node": "Wait Before Follow-up", "type": "main", "index": 0 }]] },
+    "Wait Before Follow-up": { "main": [[{ "node": "Recheck Lead Status", "type": "main", "index": 0 }]] },
+    "Recheck Lead Status": { "main": [[{ "node": "Still Unreached?", "type": "main", "index": 0 }]] },
+    "Still Unreached?": {
+      "main": [
+        [{ "node": "Send WhatsApp Follow-up", "type": "main", "index": 0 }],
+        [{ "node": "Resolved Another Way", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "CLAUDE.md §17 Workflow B — triggered by Workflow A when a call goes unanswered. Waits, re-checks the lead's status (so a lead reached some other way in the meantime isn't double-messaged), then sends the mocked WhatsApp fallback. 5-minute wait is a demo-appropriate value — a real deployment would use a longer window. Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET — see workflows/n8n/README.md."
+  }
+}

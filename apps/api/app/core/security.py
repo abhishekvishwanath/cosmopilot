@@ -1,3 +1,4 @@
+import hmac
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
@@ -155,3 +156,32 @@ async def get_current_clinic_staff(
     return ClinicPrincipal(
         user_id=user_id, email=user.get("email"), clinic_id=staff.clinic_id, role=staff.role
     )
+
+
+def verify_n8n_webhook(
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_webhook_secret: Annotated[str | None, Header()] = None,
+) -> None:
+    """
+    Authenticates n8n's own calls into `/api/v1/webhooks/n8n/*` (CLAUDE.md
+    §24 — every webhook needs verification). n8n's HTTP Request node
+    doesn't do request signing the way Meta/Stripe/Vapi webhooks will
+    (Phase 9/10), so a static shared-secret header is the pragmatic
+    equivalent at this trust boundary; those later integrations get real
+    signature verification when they land.
+    """
+    if not settings.n8n_webhook_shared_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": {
+                    "code": "n8n_not_configured",
+                    "message": "N8N_WEBHOOK_SHARED_SECRET is not set.",
+                    "details": {},
+                }
+            },
+        )
+    if not x_webhook_secret or not hmac.compare_digest(
+        x_webhook_secret, settings.n8n_webhook_shared_secret
+    ):
+        raise AuthError("invalid_webhook_secret", "Missing or invalid X-Webhook-Secret header.")

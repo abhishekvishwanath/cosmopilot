@@ -9,7 +9,7 @@ from app.agents import concierge as concierge_agent
 from app.core.logging import log_with_fields
 from app.core.security import ClinicPrincipal, get_current_clinic_staff
 from app.db.session import get_db
-from app.providers.llm.ollama import OllamaError
+from app.providers.llm.base import LLMProviderError
 from app.repositories import clinics as clinics_repo
 from app.repositories import leads as leads_repo
 from app.schemas.concierge import ConciergeMessageRequest, ConciergeMessageResponse, ToolCallRead
@@ -60,7 +60,7 @@ async def send_concierge_message(
     try:
         await concierge_agent.summarize_conversation(db, conversation)
         await db.commit()
-    except OllamaError:
+    except LLMProviderError:
         log_with_fields(
             logger,
             logging.WARNING,

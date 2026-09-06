@@ -1,0 +1,170 @@
+{
+  "name": "CosmoPilot A — New Lead",
+  "nodes": [
+    {
+      "id": "webhook-lead-created",
+      "name": "Lead Created",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead.created",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "http-get-lead-status",
+      "name": "Get Lead Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/leads/{{ $json.body.lead_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "if-is-new",
+      "name": "Is New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c-is-new",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "NEW",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-attempt-call",
+      "name": "Attempt AI Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [660, -100],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/leads/{{ $json.lead_id }}/attempt-call",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $('Lead Created').item.json.body.clinic_id }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "if-call-answered",
+      "name": "Call Answered?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [880, -100],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "c-answered",
+              "leftValue": "={{ $json.outcome }}",
+              "rightValue": "answered",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-contacted",
+      "name": "Contacted",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, -180],
+      "parameters": {}
+    },
+    {
+      "id": "http-trigger-workflow-b",
+      "name": "Trigger WhatsApp Fallback Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [1100, -20],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.N8N_INSTANCE_URL }}/webhook/call.unanswered",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"lead_id\": $json.lead_id, \"clinic_id\": $('Lead Created').item.json.body.clinic_id } }}",
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "noop-already-handled",
+      "name": "Already Handled",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 100],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Lead Created": { "main": [[{ "node": "Get Lead Status", "type": "main", "index": 0 }]] },
+    "Get Lead Status": { "main": [[{ "node": "Is New?", "type": "main", "index": 0 }]] },
+    "Is New?": {
+      "main": [
+        [{ "node": "Attempt AI Call", "type": "main", "index": 0 }],
+        [{ "node": "Already Handled", "type": "main", "index": 0 }]
+      ]
+    },
+    "Attempt AI Call": { "main": [[{ "node": "Call Answered?", "type": "main", "index": 0 }]] },
+    "Call Answered?": {
+      "main": [
+        [{ "node": "Contacted", "type": "main", "index": 0 }],
+        [{ "node": "Trigger WhatsApp Fallback Workflow", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "CLAUDE.md §17 Workflow A — receives lead.created from FastAPI, re-checks status (idempotency), attempts the mocked AI call, and hands off to Workflow B (call.unanswered) if unanswered. Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET, N8N_INSTANCE_URL — see workflows/n8n/README.md."
+  }
+}

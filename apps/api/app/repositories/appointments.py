@@ -1,9 +1,15 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment, AppointmentEvent
+
+# Appointment statuses that still represent a real, upcoming/ongoing
+# obligation — used to find reminder/no-show candidates without matching
+# ones already resolved (cancelled/completed/no_show).
+_ACTIVE_STATUSES = ("pending", "booked", "confirmed")
 
 
 async def list_appointments(
@@ -41,9 +47,7 @@ async def create_appointment(db: AsyncSession, clinic_id: uuid.UUID, data: dict)
     return appointment
 
 
-async def update_appointment(
-    db: AsyncSession, appointment: Appointment, data: dict
-) -> Appointment:
+async def update_appointment(db: AsyncSession, appointment: Appointment, data: dict) -> Appointment:
     for field, value in data.items():
         setattr(appointment, field, value)
     await db.flush()
@@ -91,3 +95,43 @@ async def count_upcoming(db: AsyncSession, clinic_id: uuid.UUID) -> int:
     )
     result = await db.execute(query)
     return result.scalar_one()
+
+
+async def has_appointment_event(
+    db: AsyncSession, appointment_id: uuid.UUID, event_type: str
+) -> bool:
+    """Idempotency check (CLAUDE.md §24) for n8n-triggered actions that
+    must only ever run once per appointment — e.g. a reminder or
+    confirmation shouldn't double-send if n8n retries the same step."""
+    result = await db.execute(
+        select(AppointmentEvent.id).where(
+            AppointmentEvent.appointment_id == appointment_id,
+            AppointmentEvent.event_type == event_type,
+        )
+    )
+    return result.first() is not None
+
+
+async def list_appointments_needing_reminder(
+    db: AsyncSession, clinic_id: uuid.UUID, window_start: datetime, window_end: datetime
+) -> list[Appointment]:
+    """
+    Candidates for Workflow E's scheduled reminder send: active
+    appointments starting within the window that don't already have a
+    "reminder_sent" event — n8n's own Schedule Trigger calls this
+    periodically rather than FastAPI tracking reminder timing itself
+    (CLAUDE.md §6 — n8n owns delays/scheduling, FastAPI owns state).
+    """
+    already_reminded = select(AppointmentEvent.appointment_id).where(
+        AppointmentEvent.event_type == "reminder_sent"
+    )
+    query = select(Appointment).where(
+        Appointment.clinic_id == clinic_id,
+        Appointment.status.in_(_ACTIVE_STATUSES),
+        Appointment.start.is_not(None),
+        Appointment.start >= window_start,
+        Appointment.start <= window_end,
+        Appointment.id.not_in(already_reminded),
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())

@@ -1,0 +1,92 @@
+{
+  "name": "CosmoPilot D — Appointment Reminders",
+  "nodes": [
+    {
+      "id": "schedule-every-15-min",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [0, 0],
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      }
+    },
+    {
+      "id": "http-reminders-due",
+      "name": "Get Reminders Due",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/appointments/reminders-due",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $vars.CLINIC_ID }}" },
+            { "name": "within_minutes", "value": "1440" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      }
+    },
+    {
+      "id": "split-out-appointments",
+      "name": "One Appointment Per Item",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [440, 0],
+      "parameters": {
+        "fieldToSplitOut": "appointments"
+      }
+    },
+    {
+      "id": "http-send-reminder",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [660, 0],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.COSMOPILOT_API_URL }}/webhooks/n8n/appointments/{{ $json.appointment_id }}/reminder-sent",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "clinic_id", "value": "={{ $vars.CLINIC_ID }}" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Webhook-Secret", "value": "={{ $vars.COSMOPILOT_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } },
+          "batching": { "batch": { "batchSize": 1, "batchInterval": 500 } }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": { "main": [[{ "node": "Get Reminders Due", "type": "main", "index": 0 }]] },
+    "Get Reminders Due": { "main": [[{ "node": "One Appointment Per Item", "type": "main", "index": 0 }]] },
+    "One Appointment Per Item": { "main": [[{ "node": "Send Reminder", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "description": "CLAUDE.md §17 Workflow E — n8n owns the reminder schedule (CLAUDE.md §6: n8n is the orchestration/delay layer, FastAPI owns state); every 15 minutes it asks FastAPI which appointments in the next 24h haven't had a reminder yet, then sends one per appointment (idempotent server-side via an AppointmentEvent check, so a re-run within the same window never double-sends). 15 minutes is a demo-appropriate cadence — a real deployment would likely run hourly. Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET, CLINIC_ID — see workflows/n8n/README.md."
+  }
+}
