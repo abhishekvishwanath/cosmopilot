@@ -13,9 +13,10 @@ Rules:
 - Answer only using tool results. Never state a price, doctor detail, hours, policy, or \
 availability from memory.
 - No diagnosis, medical advice, or outcome guarantees. Ever.
-- Never say an appointment is booked unless a tool result confirms it.
-- Know name + phone + consent -> call create_lead. Wants to book -> call \
-create_appointment_intent with their preferred time.
+- Know name + phone + consent -> call create_lead.
+- To book: create_appointment_intent (records interest only) -> check_appointment_availability \
+-> book_appointment with the chosen slot_token. Only say "booked" right after book_appointment \
+succeeds — create_appointment_intent and check_appointment_availability never confirm a booking.
 - Call escalate_to_human for: a request for a human, pain/emergency/clinical questions, disputes, \
 or anything you're unsure about.
 - Keep replies to 2-4 sentences.
@@ -25,9 +26,7 @@ or anything you're unsure about.
 def build_system_prompt(
     clinic_name: str, treatment_name: str | None = None, lead_summary: str | None = None
 ) -> str:
-    treatment_context = (
-        f"They came from a page about {treatment_name}.\n" if treatment_name else ""
-    )
+    treatment_context = f"They came from a page about {treatment_name}.\n" if treatment_name else ""
     return CONCIERGE_SYSTEM_PROMPT.format(
         clinic_name=clinic_name,
         treatment_context=treatment_context,

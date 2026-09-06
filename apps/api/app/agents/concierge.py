@@ -7,6 +7,7 @@ handler that the *service layer* validates, same as the rest of the app.
 
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Literal
@@ -63,6 +64,49 @@ _EXPLICIT_HUMAN_REQUEST_PHRASES = (
 def _requests_human(text: str) -> bool:
     lowered = text.lower()
     return any(phrase in lowered for phrase in _EXPLICIT_HUMAN_REQUEST_PHRASES)
+
+
+# The single highest-stakes fabrication this system can make (CLAUDE.md
+# §15/§25 call it out explicitly: "never independently mark an appointment
+# as booked"). Deliberately broad — any standalone "booked"/"confirmed",
+# not just full phrases — because a small local model's fabricated
+# confirmation isn't always a full sentence (observed live: it once
+# replied with the bare word "booked" and nothing else). Paired with
+# _confirmed_by_tool_evidence below so a truthful restatement of an
+# already-booked appointment (from get_appointment_status, or this turn's
+# own successful book_appointment call) is never flagged — only a claim
+# with no matching tool evidence behind it. The cost of an occasional
+# false positive (an unnecessary "let me double-check") is far lower than
+# a false negative reaching a patient as a real confirmation.
+_BOOKING_CONFIRMATION_RE = re.compile(r"\b(booked|confirmed)\b", re.IGNORECASE)
+
+
+def _claims_booking_confirmed(text: str) -> bool:
+    return bool(_BOOKING_CONFIRMATION_RE.search(text))
+
+
+# Catches the model writing a tool call out as plain text instead of
+# issuing a real one (e.g. `book_appointment("abc123")`,
+# `get_appointment_status()`) — a known qwen2.5:7b failure mode under a
+# full tool schema (see Phase 6's report). Anchored to the whole message so
+# it only matches an unmistakable "name(args)" shape, never a normal
+# sentence that happens to contain parentheses.
+_FAKE_TOOL_CALL_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\s*\(.*\)$", re.DOTALL)
+
+
+def _looks_like_an_unexecuted_tool_call(text: str) -> bool:
+    return bool(_FAKE_TOOL_CALL_RE.match(text.strip()))
+
+
+def _confirmed_by_tool_evidence(tool_trace: list["ToolCallTrace"]) -> bool:
+    for t in tool_trace:
+        if t.name == "book_appointment" and t.result.get("booked") is True:
+            return True
+        if t.name == "get_appointment_status":
+            for appt in t.result.get("appointments", []) or []:
+                if appt.get("status") in ("booked", "confirmed", "completed"):
+                    return True
+    return False
 
 
 @dataclass(frozen=True)
@@ -155,7 +199,10 @@ async def handle_turn(
             "Reminder: for ANY factual claim — hours, pricing, doctor names/credentials, "
             "policies, treatment specifics — call the matching tool now, even if a similar "
             "question was already answered earlier in this conversation. Never answer from "
-            "memory or assumption."
+            "memory or assumption. If the visitor just confirmed a time from options you gave "
+            "them, find that slot_token from your last check_appointment_availability result "
+            "and call book_appointment with it now — do not reply 'booked' or similar unless "
+            "book_appointment actually ran and succeeded."
         ),
     }
     chat_messages: list[ChatMessage] = [
@@ -175,9 +222,32 @@ async def handle_turn(
             response = await llm.chat(messages=chat_messages, tools=TOOL_SCHEMAS)
 
             if not response.tool_calls:
-                final_text = response.content or (
-                    "Sorry, could you rephrase that? I want to make sure I understand."
-                )
+                content = (response.content or "").strip()
+                if content and _looks_like_an_unexecuted_tool_call(content):
+                    # Observed live: qwen2.5:7b occasionally writes a tool
+                    # call out as plain text (e.g. `book_appointment("...")`)
+                    # instead of issuing a real structured call — most
+                    # dangerous for booking, where a raw fake call must
+                    # never be mistaken for the real thing. No tool actually
+                    # ran, so nothing happened; never show this raw text to
+                    # the patient — escalate instead of guessing what it meant.
+                    log_with_fields(
+                        logger,
+                        logging.WARNING,
+                        "model_emitted_tool_call_as_text",
+                        clinic_id=str(clinic.id),
+                        lead_id=str(lead.id),
+                        raw_content=content,
+                    )
+                    final_text = (
+                        "I want to make sure this goes through correctly, so I'm having the "
+                        "clinic team confirm it directly — they'll follow up with you shortly."
+                    )
+                    await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
+                else:
+                    final_text = content or (
+                        "Sorry, could you rephrase that? I want to make sure I understand."
+                    )
                 break
 
             chat_messages.append({"role": "assistant", "content": response.content or ""})
@@ -244,6 +314,21 @@ async def handle_turn(
         await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
 
     assert final_text is not None  # every branch above sets it
+
+    if _claims_booking_confirmed(final_text) and not _confirmed_by_tool_evidence(tool_trace):
+        log_with_fields(
+            logger,
+            logging.WARNING,
+            "deterministic_booking_guard_triggered",
+            clinic_id=str(clinic.id),
+            lead_id=str(lead.id),
+            original_reply=final_text,
+        )
+        final_text = (
+            "I want to double-check that time is actually confirmed before telling you it's "
+            "booked — I'll have the clinic team verify and get right back to you."
+        )
+        await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
 
     already_escalated = any(t.name == "escalate_to_human" for t in tool_trace)
     if not already_escalated and _requests_human(user_message):
