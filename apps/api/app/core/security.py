@@ -1,11 +1,12 @@
 import hmac
+import logging
 import uuid
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -185,3 +186,39 @@ def verify_n8n_webhook(
         x_webhook_secret, settings.n8n_webhook_shared_secret
     ):
         raise AuthError("invalid_webhook_secret", "Missing or invalid X-Webhook-Secret header.")
+
+
+def verify_vapi_webhook(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    x_vapi_secret: Annotated[str | None, Header()] = None,
+) -> None:
+    """
+    Authenticates Vapi's own calls into `/api/v1/webhooks/vapi` (CLAUDE.md
+    §24). Vapi is configured (scripts/create_vapi_assistant.py) with a
+    `server.secret` that it's documented to echo back on an `x-vapi-secret`
+    header — verified against real account data (an existing assistant on
+    this Vapi account) but not yet confirmed against Vapi's current public
+    docs, since those pages 404'd during Phase 10 research. Logs every
+    header on a mismatch (never the correct secret itself) so the real
+    header name is visible from the first live test call if this guess
+    turns out wrong — but always fails closed either way; nothing here
+    ever bypasses verification.
+    """
+    if not settings.vapi_webhook_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": {
+                    "code": "vapi_not_configured",
+                    "message": "VAPI_WEBHOOK_SECRET is not set.",
+                    "details": {},
+                }
+            },
+        )
+    if not x_vapi_secret or not hmac.compare_digest(x_vapi_secret, settings.vapi_webhook_secret):
+        logging.getLogger("cosmopilot.webhooks.vapi").warning(
+            "vapi_webhook_secret_header_mismatch headers=%s",
+            {k: v for k, v in request.headers.items() if "secret" not in k.lower()},
+        )
+        raise AuthError("invalid_webhook_secret", "Missing or invalid x-vapi-secret header.")

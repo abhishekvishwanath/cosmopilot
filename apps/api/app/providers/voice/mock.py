@@ -22,7 +22,16 @@ class MockVoiceProvider(VoiceProvider):
     def __init__(self) -> None:
         self._counter = itertools.count()
 
-    async def start_call(self, *, to: str, clinic_name: str, lead_name: str) -> CallHandle:
+    async def start_call(
+        self,
+        *,
+        to: str,
+        clinic_name: str,
+        lead_name: str,
+        clinic_id: uuid.UUID | None = None,
+        lead_id: uuid.UUID | None = None,
+        treatment_name: str | None = None,
+    ) -> CallHandle:
         call_id = uuid.uuid4().hex
         answered = next(self._counter) % 2 == 0
         status: CallStatus = "answered" if answered else "no_answer"

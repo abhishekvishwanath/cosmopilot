@@ -24,6 +24,7 @@ from app.models.appointment import Appointment
 from app.models.lead import Lead
 from app.providers.email import get_email_provider
 from app.providers.voice import get_voice_provider
+from app.providers.voice.base import VoiceProviderError
 from app.providers.whatsapp import get_whatsapp_provider
 from app.repositories import appointments as appointments_repo
 from app.repositories import catalog as catalog_repo
@@ -129,10 +130,43 @@ async def attempt_call(
 
     await leads_service.transition_lead_status(db, lead, "CONTACTING")
 
+    treatment_name = None
+    if lead.treatment_id:
+        treatment = await catalog_repo.get_treatment(db, clinic_id, lead.treatment_id)
+        treatment_name = treatment.name if treatment else None
+
     provider = get_voice_provider()
-    handle = await provider.start_call(to=lead.phone, clinic_name=clinic.name, lead_name=lead.name)
-    new_status = "CONTACTED" if handle.status == "answered" else "NO_ANSWER"
-    await leads_service.transition_lead_status(db, lead, new_status)
+    try:
+        handle = await provider.start_call(
+            to=lead.phone,
+            clinic_name=clinic.name,
+            lead_name=lead.name,
+            clinic_id=clinic_id,
+            lead_id=lead.id,
+            treatment_name=treatment_name,
+        )
+    except VoiceProviderError as exc:
+        # The call never happened at all (bad number, provider/account
+        # limitation, etc) — never fabricate an outcome for it (CLAUDE.md
+        # §25); hand off to a human instead of leaving the lead stuck at
+        # CONTACTING forever.
+        log_with_fields(
+            logger, logging.WARNING, "voice_call_failed", lead_id=str(lead.id), error=str(exc)
+        )
+        await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
+        await events_repo.create_event(
+            db,
+            clinic_id=clinic_id,
+            event_type="ai_call_failed",
+            source="n8n",
+            lead_id=lead.id,
+            metadata={"error": str(exc)},
+        )
+        await db.commit()
+        return CallAttemptResult(
+            attempted=False, lead_status="HUMAN_REQUIRED", reason="voice provider call failed"
+        )
+
     await events_repo.create_event(
         db,
         clinic_id=clinic_id,
@@ -141,6 +175,21 @@ async def attempt_call(
         lead_id=lead.id,
         metadata={"call_id": handle.call_id, "outcome": handle.status},
     )
+
+    if handle.status == "initiated":
+        # Real async provider (Vapi) — the actual outcome isn't known yet.
+        # It arrives later via Vapi's own end-of-call-report webhook
+        # (app/api/v1/vapi.py), which is what transitions the lead to
+        # CONTACTED/NO_ANSWER and, if unanswered, triggers the WhatsApp
+        # fallback directly — never fabricated here (CLAUDE.md §25).
+        await db.commit()
+        log_with_fields(
+            logger, logging.INFO, "n8n_attempt_call", lead_id=str(lead.id), outcome="initiated"
+        )
+        return CallAttemptResult(attempted=True, outcome="initiated", lead_status="CONTACTING")
+
+    new_status = "CONTACTED" if handle.status == "answered" else "NO_ANSWER"
+    await leads_service.transition_lead_status(db, lead, new_status)
     await db.commit()
 
     log_with_fields(

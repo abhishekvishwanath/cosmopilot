@@ -92,52 +92,6 @@
       }
     },
     {
-      "id": "if-call-answered",
-      "name": "Call Answered?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [880, -100],
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
-          "conditions": [
-            {
-              "id": "c-answered",
-              "leftValue": "={{ $json.outcome }}",
-              "rightValue": "answered",
-              "operator": { "type": "string", "operation": "equals" }
-            }
-          ],
-          "combinator": "and"
-        }
-      }
-    },
-    {
-      "id": "noop-contacted",
-      "name": "Contacted",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [1100, -180],
-      "parameters": {}
-    },
-    {
-      "id": "http-trigger-workflow-b",
-      "name": "Trigger WhatsApp Fallback Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [1100, -20],
-      "onError": "continueRegularOutput",
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.N8N_INSTANCE_URL }}/webhook/call.unanswered",
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "json",
-        "jsonBody": "={{ { \"lead_id\": $json.lead_id, \"clinic_id\": $('Lead Created').item.json.body.clinic_id } }}",
-        "options": { "response": { "response": { "responseFormat": "json" } } }
-      }
-    },
-    {
       "id": "noop-already-handled",
       "name": "Already Handled",
       "type": "n8n-nodes-base.noOp",
@@ -154,17 +108,10 @@
         [{ "node": "Attempt AI Call", "type": "main", "index": 0 }],
         [{ "node": "Already Handled", "type": "main", "index": 0 }]
       ]
-    },
-    "Attempt AI Call": { "main": [[{ "node": "Call Answered?", "type": "main", "index": 0 }]] },
-    "Call Answered?": {
-      "main": [
-        [{ "node": "Contacted", "type": "main", "index": 0 }],
-        [{ "node": "Trigger WhatsApp Fallback Workflow", "type": "main", "index": 0 }]
-      ]
     }
   },
   "settings": { "executionOrder": "v1" },
   "meta": {
-    "description": "CLAUDE.md §17 Workflow A — receives lead.created from FastAPI, re-checks status (idempotency), attempts the mocked AI call, and hands off to Workflow B (call.unanswered) if unanswered. Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET, N8N_INSTANCE_URL — see workflows/n8n/README.md."
+    "description": "CLAUDE.md §17 Workflow A — receives lead.created from FastAPI, re-checks status (idempotency), and attempts the AI call. As of Phase 10 (real Vapi calling), the call's outcome is asynchronous — it no longer arrives synchronously in attempt-call's response, so this workflow just triggers the call and stops. The Vapi end-of-call-report webhook (apps/api/app/api/v1/vapi.py) decides answered/no-answer itself and calls Workflow B's call.unanswered webhook directly when the call goes unanswered, instead of this workflow branching on it (see workflow-b-call-unanswered.json). Requires n8n Variables: COSMOPILOT_API_URL, COSMOPILOT_WEBHOOK_SECRET — see workflows/n8n/README.md."
   }
 }

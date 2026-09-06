@@ -1,3 +1,4 @@
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Literal
@@ -8,6 +9,14 @@ from typing import Literal
 # resolve straight to "answered"/"no_answer" since there's no real call in
 # flight to wait on.
 CallStatus = Literal["initiated", "answered", "no_answer", "failed"]
+
+
+class VoiceProviderError(RuntimeError):
+    """A real provider (Vapi) rejected or failed the call request itself —
+    distinct from a normal call outcome (no_answer), this means the call
+    never happened at all (bad number, provider/account limitation, etc).
+    Callers must handle this gracefully (CLAUDE.md §25), never let it
+    surface as an unhandled 500."""
 
 
 @dataclass(frozen=True)
@@ -27,4 +36,20 @@ class CallHandle:
 
 class VoiceProvider(ABC):
     @abstractmethod
-    async def start_call(self, *, to: str, clinic_name: str, lead_name: str) -> CallHandle: ...
+    async def start_call(
+        self,
+        *,
+        to: str,
+        clinic_name: str,
+        lead_name: str,
+        clinic_id: uuid.UUID | None = None,
+        lead_id: uuid.UUID | None = None,
+        treatment_name: str | None = None,
+    ) -> CallHandle:
+        """
+        `clinic_id`/`lead_id` let a real, asynchronous provider (Vapi) echo
+        them back on its own webhooks to correlate an outcome to the right
+        lead later — MockVoiceProvider ignores them since it never needs
+        that round trip. `treatment_name` personalizes the call opener.
+        """
+        ...

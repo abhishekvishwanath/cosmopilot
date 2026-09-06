@@ -15,8 +15,8 @@ workflows racing for the same path.
 
 | File | CLAUDE.md §17 | Trigger | Live on n8n Cloud |
 |---|---|---|---|
-| `workflow-a-new-lead.json` | Workflow A | Webhook `lead.created` | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/ALsVsSQykCqWHVPJ) |
-| `workflow-b-call-unanswered.json` | Workflow B | Webhook `call.unanswered` (called by Workflow A) | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/VqHm6PKXInJyXaZe) |
+| `workflow-a-new-lead.json` | Workflow A | Webhook `lead.created` | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/ALsVsSQykCqWHVPJ) — updated Phase 10 |
+| `workflow-b-call-unanswered.json` | Workflow B | Webhook `call.unanswered` (called by FastAPI's Vapi webhook handler as of Phase 10 — see below) | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/VqHm6PKXInJyXaZe) |
 | `workflow-appointment-status-changed.json` | Workflows D + F | Webhook `appointment.status_changed` | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/LF2qrB20T42hutcu) |
 | `workflow-appointment-reminders.json` | Workflow E | Schedule (every 15 min — demo cadence) | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/moFF6w5cO5GZjhA7) |
 
@@ -41,9 +41,12 @@ In n8n: **Workflows → Import from File**, pick each JSON, then:
      a tunnel — e.g. `ngrok http 8000` — pointed at the FastAPI dev server).
    - `COSMOPILOT_WEBHOOK_SECRET` — must match `N8N_WEBHOOK_SHARED_SECRET`
      in `apps/api/.env` exactly.
-   - `N8N_INSTANCE_URL` — this n8n instance's own base URL (e.g.
-     `https://your-instance.app.n8n.cloud`), only needed by Workflow A to
-     call Workflow B.
+   - `N8N_INSTANCE_URL` — no longer used as of Phase 10 (kept as a variable
+     for backward compatibility if you still have it set). Originally let
+     Workflow A call Workflow B directly for a synchronous mock call
+     outcome; real Vapi calls are asynchronous, so FastAPI's own
+     `app/api/v1/vapi.py` now triggers Workflow B's `call.unanswered`
+     webhook itself once the real call ends unanswered.
    - `CLINIC_ID` — the demo clinic's UUID, only needed by the Reminders
      workflow's Schedule Trigger (the other workflows get `clinic_id` from
      the incoming webhook payload).

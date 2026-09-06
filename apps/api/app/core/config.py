@@ -81,6 +81,18 @@ class Settings(BaseSettings):
     n8n_webhook_base_url: str | None = None
     n8n_webhook_shared_secret: str | None = None
 
+    # Voice / Vapi (Phase 10) — Vapi is call transport only (CLAUDE.md §7);
+    # the model, tools, and system prompt it runs come from the same
+    # sources as the text Concierge (see scripts/create_vapi_assistant.py).
+    # `vapi_webhook_secret` is checked on inbound Vapi -> apps/api calls,
+    # same trust-boundary pattern as n8n_webhook_shared_secret. Unset means
+    # Vapi isn't configured — get_voice_provider() falls back to the mock.
+    voice_provider: Literal["vapi", "mock"] = "mock"
+    vapi_api_key: str | None = None
+    vapi_assistant_id: str | None = None
+    vapi_phone_number_id: str | None = None
+    vapi_webhook_secret: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

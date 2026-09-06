@@ -47,6 +47,15 @@ async def notify_lead_created(lead_id: uuid.UUID, clinic_id: uuid.UUID) -> None:
     await notify_n8n("lead.created", {"lead_id": str(lead_id), "clinic_id": str(clinic_id)})
 
 
+async def notify_call_unanswered(lead_id: uuid.UUID, clinic_id: uuid.UUID) -> None:
+    # Phase 10: with a real (async) VoiceProvider, the call's outcome is
+    # only known once Vapi's end-of-call-report webhook arrives — that
+    # handler is what decides "unanswered" and calls this directly, rather
+    # than n8n's Workflow A branching on a synchronous field the way it did
+    # against the Phase 8 mock (see workflows/n8n/workflow-a-new-lead.json).
+    await notify_n8n("call.unanswered", {"lead_id": str(lead_id), "clinic_id": str(clinic_id)})
+
+
 async def notify_appointment_status_changed(
     *,
     appointment_id: uuid.UUID,
