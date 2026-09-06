@@ -208,6 +208,50 @@ export interface DashboardStats {
   appointments_by_status: Record<string, number>;
 }
 
+export interface FunnelCounts {
+  leads: number;
+  ai_call_attempts: number;
+  calls_answered: number;
+  calls_no_answer: number;
+  whatsapp_followups_sent: number;
+  whatsapp_recovered: number;
+  qualified_leads: number;
+  appointment_intents: number;
+  appointments_booked: number;
+  appointments_confirmed: number;
+  attended: number;
+  no_show: number;
+  cancelled: number;
+}
+
+export interface FunnelRates {
+  call_answer_rate: number | null;
+  whatsapp_recovery_rate: number | null;
+  qualified_rate: number | null;
+  booking_rate: number | null;
+  attendance_rate: number | null;
+  no_show_rate: number | null;
+}
+
+export interface SourceBreakdownRow {
+  source: string;
+  leads: number;
+  appointments_booked: number;
+}
+
+export interface TreatmentBreakdownRow {
+  treatment: string;
+  appointments_booked: number;
+}
+
+export interface FunnelAnalytics {
+  counts: FunnelCounts;
+  rates: FunnelRates;
+  by_source: SourceBreakdownRow[];
+  by_treatment: TreatmentBreakdownRow[];
+  note: string;
+}
+
 export const LEAD_STATUSES = [
   "NEW",
   "CONTACTING",
