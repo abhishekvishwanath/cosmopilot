@@ -13,12 +13,17 @@ and a real n8n instance can only register one workflow per webhook path —
 so this workflow branches internally on `to_status` instead of two
 workflows racing for the same path.
 
-| File | CLAUDE.md §17 | Trigger |
-|---|---|---|
-| `workflow-a-new-lead.json` | Workflow A | Webhook `lead.created` |
-| `workflow-b-call-unanswered.json` | Workflow B | Webhook `call.unanswered` (called by Workflow A) |
-| `workflow-appointment-status-changed.json` | Workflows D + F | Webhook `appointment.status_changed` |
-| `workflow-appointment-reminders.json` | Workflow E | Schedule (every 15 min — demo cadence) |
+| File | CLAUDE.md §17 | Trigger | Live on n8n Cloud |
+|---|---|---|---|
+| `workflow-a-new-lead.json` | Workflow A | Webhook `lead.created` | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/ALsVsSQykCqWHVPJ) |
+| `workflow-b-call-unanswered.json` | Workflow B | Webhook `call.unanswered` (called by Workflow A) | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/VqHm6PKXInJyXaZe) |
+| `workflow-appointment-status-changed.json` | Workflows D + F | Webhook `appointment.status_changed` | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/LF2qrB20T42hutcu) |
+| `workflow-appointment-reminders.json` | Workflow E | Schedule (every 15 min — demo cadence) | [Active](https://abhi-vishwa009.app.n8n.cloud/workflow/moFF6w5cO5GZjhA7) |
+
+All four were built and deployed directly on `abhi-vishwa009.app.n8n.cloud` via the `n8n-cloud` MCP server (translated from this JSON into the n8n Workflow SDK — the JSON files here remain the source of truth for the node graph and are kept in sync manually) and are **active**. What's still required before they actually work end-to-end:
+
+1. **Set the n8n Variables** below (Settings → Variables on the n8n Cloud instance) — the workflows are live but every HTTP Request node will fail until these exist.
+2. **Make FastAPI publicly reachable** — the deployed workflows call `COSMOPILOT_API_URL`, which can't be `localhost` from n8n Cloud. Point a tunnel (e.g. `ngrok http 8000`) or a real deployment at it and set the variable accordingly.
 
 Workflow G (payment) is out of scope — CLAUDE.md §2/§32 don't require
 payment functionality for this prototype. Workflow C (WhatsApp incoming)
