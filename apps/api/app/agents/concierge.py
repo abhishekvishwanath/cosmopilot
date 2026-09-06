@@ -27,8 +27,7 @@ from app.models.clinic import Clinic
 from app.models.conversation import Conversation
 from app.models.lead import Lead
 from app.providers.llm import get_llm_provider
-from app.providers.llm.base import ChatMessage
-from app.providers.llm.ollama import OllamaError
+from app.providers.llm.base import ChatMessage, LLMProviderError
 from app.repositories import catalog as catalog_repo
 from app.repositories import conversations as conversations_repo
 from app.services import leads as leads_service
@@ -38,8 +37,13 @@ logger = logging.getLogger("cosmopilot.concierge")
 # A hard ceiling on how many tool round-trips one turn can make — never
 # trust the model to stop on its own (CLAUDE.md §5.3). If it's hit, the
 # turn deterministically escalates rather than looping forever or
-# guessing.
-MAX_TOOL_ITERATIONS = 4
+# guessing. Kept comfortably above the ~3 calls a real booking sequence
+# needs (create_appointment_intent -> check_appointment_availability ->
+# book_appointment) plus headroom for an occasional redundant repeat call
+# — observed live: a model that calls create_appointment_intent twice
+# before booking otherwise burns through a tight ceiling before it can
+# also produce a final text reply.
+MAX_TOOL_ITERATIONS = 6
 
 # Deterministic backstop, not a replacement for the LLM calling
 # escalate_to_human itself (CLAUDE.md §5.3 — critical state changes
@@ -107,6 +111,28 @@ def _confirmed_by_tool_evidence(tool_trace: list["ToolCallTrace"]) -> bool:
                 if appt.get("status") in ("booked", "confirmed", "completed"):
                     return True
     return False
+
+
+def _summarize_terminal_success(tool_trace: list["ToolCallTrace"]) -> str | None:
+    """
+    Built entirely from a tool's own structured result, never the LLM's
+    words — used only when the model ran out of tool-call turns before it
+    could also produce its own text summary. Only the *last* call counts:
+    an earlier one in the same turn (e.g. a redundant repeat) shouldn't be
+    reported as this turn's outcome.
+    """
+    if not tool_trace:
+        return None
+    last = tool_trace[-1]
+    if last.name == "book_appointment" and last.result.get("booked") is True:
+        when, doctor = last.result.get("start"), last.result.get("doctor_name")
+        suffix = f" with {doctor}" if doctor else ""
+        return f"You're booked for {when}{suffix}."
+    if last.name == "reschedule_appointment" and last.result.get("rescheduled") is True:
+        return f"Your appointment has been moved to {last.result.get('start')}."
+    if last.name == "cancel_appointment" and last.result.get("cancelled") is True:
+        return "Your appointment has been cancelled."
+    return None
 
 
 @dataclass(frozen=True)
@@ -292,14 +318,24 @@ async def handle_turn(
                     }
                 )
         else:
-            # Hit MAX_TOOL_ITERATIONS without a final answer — deterministic
-            # safety net, not a judgment call left to the model.
-            final_text = (
-                "I want to make sure you get accurate information, so I'm looping in the "
-                "clinic team directly — they'll follow up with you shortly."
-            )
-            await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
-    except OllamaError as exc:
+            # Hit MAX_TOOL_ITERATIONS without a final text answer. If this
+            # turn's last tool call was itself a real, successful terminal
+            # action (observed live: this happens — a booking can succeed
+            # and still run out of turns before the model also produces a
+            # text summary), confirm it directly from that tool's own
+            # result rather than discarding a genuine success as if it
+            # were a failure. This is a deterministic confirmation built
+            # from tool evidence, not the LLM's own words — never trust
+            # the model's summary alone for a state this critical (CLAUDE.md
+            # §5.3). Otherwise, the actual safety net: escalate.
+            final_text = _summarize_terminal_success(tool_trace)
+            if final_text is None:
+                final_text = (
+                    "I want to make sure you get accurate information, so I'm looping in the "
+                    "clinic team directly — they'll follow up with you shortly."
+                )
+                await leads_service.transition_lead_status(db, lead, "HUMAN_REQUIRED")
+    except LLMProviderError as exc:
         log_with_fields(
             logger,
             logging.WARNING,

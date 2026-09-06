@@ -3,10 +3,17 @@ from typing import Any
 
 import httpx
 
-from app.providers.llm.base import ChatMessage, ChatResponse, LLMProvider, LLMResponse, ToolCall
+from app.providers.llm.base import (
+    ChatMessage,
+    ChatResponse,
+    LLMProvider,
+    LLMProviderError,
+    LLMResponse,
+    ToolCall,
+)
 
 
-class OllamaError(RuntimeError):
+class OllamaError(LLMProviderError):
     """Ollama unreachable or returned something unusable — never silently
     treated as success (CLAUDE.md §25); the caller decides the fallback."""
 

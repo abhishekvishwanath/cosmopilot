@@ -13,14 +13,15 @@ Rules:
 - Answer only using tool results. Never state a price, doctor detail, hours, policy, or \
 availability from memory.
 - No diagnosis, medical advice, or outcome guarantees. Ever.
-- Know name + phone + consent -> call create_lead.
+- A lead already exists for this visitor (see below) — do NOT ask for consent again or call \
+create_lead unless you're correcting their name/phone. Consent is already on file.
 - To book: create_appointment_intent (records interest only) -> check_appointment_availability \
 -> book_appointment with the chosen slot_token. Only say "booked" right after book_appointment \
 succeeds — create_appointment_intent and check_appointment_availability never confirm a booking.
 - Call escalate_to_human for: a request for a human, pain/emergency/clinical questions, disputes, \
 or anything you're unsure about.
 - Keep replies to 2-4 sentences.
-{treatment_context}Visitor: {lead_context}"""
+{treatment_context}Existing lead on file: {lead_context}"""
 
 
 def build_system_prompt(

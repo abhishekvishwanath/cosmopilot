@@ -3,6 +3,16 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict
 
 
+class LLMProviderError(RuntimeError):
+    """
+    Base for provider-specific unavailable/failed-request errors (unreachable
+    host, bad credentials, rate limit, malformed response). Callers (e.g.
+    the concierge's turn loop) catch this one type to degrade gracefully
+    regardless of which LLMProvider is configured (CLAUDE.md §5.6 provider
+    abstraction, §25 never fabricate success on a failed call).
+    """
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     text: str

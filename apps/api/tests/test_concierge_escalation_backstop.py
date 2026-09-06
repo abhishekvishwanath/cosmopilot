@@ -4,6 +4,7 @@ from app.agents.concierge import (
     _confirmed_by_tool_evidence,
     _looks_like_an_unexecuted_tool_call,
     _requests_human,
+    _summarize_terminal_success,
 )
 
 
@@ -86,6 +87,49 @@ def test_looks_like_an_unexecuted_tool_call_detects_fake_calls() -> None:
 
 def test_looks_like_an_unexecuted_tool_call_false_for_normal_replies() -> None:
     assert _looks_like_an_unexecuted_tool_call("Sure, I can help with that!") is False
-    assert (
-        _looks_like_an_unexecuted_tool_call("Call us at (04) 000-0000 for more info.") is False
-    )
+    assert _looks_like_an_unexecuted_tool_call("Call us at (04) 000-0000 for more info.") is False
+
+
+def test_summarize_terminal_success_confirms_a_real_booking() -> None:
+    """
+    This is the exact bug the helper exists to catch — observed live: a
+    booking succeeded but the turn ran out of MAX_TOOL_ITERATIONS before
+    the model could also produce a text reply, so the generic "looping in
+    the clinic team" fallback fired and downgraded a real success into an
+    escalation. Confirming from the tool's own result instead avoids that.
+    """
+    trace = [
+        ToolCallTrace(
+            name="book_appointment",
+            arguments={"slot_token": "abc"},
+            result={
+                "booked": True,
+                "start": "2026-09-07T09:00:00+04:00",
+                "doctor_name": "Dr. Layla Haddad",
+            },
+        )
+    ]
+    summary = _summarize_terminal_success(trace)
+    assert summary is not None
+    assert "2026-09-07T09:00:00+04:00" in summary
+    assert "Dr. Layla Haddad" in summary
+
+
+def test_summarize_terminal_success_only_considers_the_last_call() -> None:
+    trace = [
+        ToolCallTrace(name="book_appointment", arguments={}, result={"booked": True, "start": "x"}),
+        ToolCallTrace(
+            name="create_appointment_intent", arguments={}, result={"status": "APPOINTMENT_INTENT"}
+        ),
+    ]
+    assert _summarize_terminal_success(trace) is None
+
+
+def test_summarize_terminal_success_none_when_nothing_succeeded() -> None:
+    trace = [
+        ToolCallTrace(
+            name="create_appointment_intent", arguments={}, result={"status": "APPOINTMENT_INTENT"}
+        )
+    ]
+    assert _summarize_terminal_success(trace) is None
+    assert _summarize_terminal_success([]) is None

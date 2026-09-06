@@ -44,18 +44,26 @@ class Settings(BaseSettings):
         # legacy HS256 shared secret. Either is enough to attempt auth.
         return bool(self.supabase_url or self.supabase_jwt_secret)
 
-    # AI knowledge base (Phase 5) — free/local by default per project
-    # decision: bge-small-en-v1.5 via fastembed for embeddings, a local
-    # Ollama model for grounded-answer generation. Both run with no API
-    # key; "mock" is available for tests/CI where neither dependency is
-    # installed or running.
+    # AI knowledge base (Phase 5) — embeddings stay free/local
+    # (bge-small-en-v1.5 via fastembed, no API key). The answer-generation
+    # LLM moved off local Ollama on 2026-09-06 after live testing showed
+    # qwen2.5:7b hallucinating and unreliably issuing tool calls in
+    # multi-turn conversations (see the Phase 6/7 reports) — Groq's hosted
+    # inference now serves both grounded QA and the AI Concierge's tool
+    # calling. "mock" is available for tests/CI needing neither dependency.
     embedding_provider: Literal["fastembed", "mock"] = "fastembed"
-    llm_provider: Literal["ollama", "mock"] = "ollama"
+    llm_provider: Literal["groq", "ollama", "mock"] = "groq"
+
+    groq_api_key: str | None = None
+    # openai/gpt-oss-120b — Groq's largest open-weight (Apache-2.0) model
+    # with tool-calling support, chosen for the strongest tool-selection
+    # reliability among the tool-calling-capable models on this account
+    # (also considered: openai/gpt-oss-20b, qwen/qwen3.8-27b).
+    groq_model: str = "openai/gpt-oss-120b"
+
+    # Kept as an alternative free/local option (CLAUDE.md §5.6 — providers
+    # must stay swappable) even though it's no longer the default.
     ollama_url: str = "http://localhost:11434"
-    # qwen2.5:7b, not llama3 — llama3 (Meta's original 3.0 release, already
-    # on this machine) doesn't support tool calling at all in Ollama, which
-    # Phase 6's AI Concierge needs. qwen2.5 also handles Phase 5's grounded
-    # QA at least as well in testing, so one model now serves both.
     ollama_model: str = "qwen2.5:7b"
 
 
