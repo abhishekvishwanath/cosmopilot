@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     embedding_provider: Literal["fastembed", "mock"] = "fastembed"
     llm_provider: Literal["ollama", "mock"] = "ollama"
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3"
+    # qwen2.5:7b, not llama3 — llama3 (Meta's original 3.0 release, already
+    # on this machine) doesn't support tool calling at all in Ollama, which
+    # Phase 6's AI Concierge needs. qwen2.5 also handles Phase 5's grounded
+    # QA at least as well in testing, so one model now serves both.
+    ollama_model: str = "qwen2.5:7b"
 
 
 @lru_cache

@@ -1,6 +1,9 @@
+import uuid
+from typing import Any
+
 import httpx
 
-from app.providers.llm.base import LLMProvider, LLMResponse
+from app.providers.llm.base import ChatMessage, ChatResponse, LLMProvider, LLMResponse, ToolCall
 
 
 class OllamaError(RuntimeError):
@@ -43,3 +46,36 @@ class OllamaLLMProvider(LLMProvider):
         if not text:
             raise OllamaError("Ollama returned an empty response.")
         return LLMResponse(text=text, model=self._model)
+
+    async def chat(
+        self, *, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None
+    ) -> ChatResponse:
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": list(messages),
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+        if tools:
+            payload["tools"] = tools
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(f"{self._base_url}/api/chat", json=payload)
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise OllamaError(f"Ollama chat request failed: {exc}") from exc
+
+        message = response.json().get("message", {})
+        content = message.get("content") or None
+        tool_calls = [
+            ToolCall(
+                id=str(call.get("id") or uuid.uuid4()),
+                name=call["function"]["name"],
+                arguments=call["function"].get("arguments", {}),
+            )
+            for call in message.get("tool_calls", []) or []
+        ]
+        if content is None and not tool_calls:
+            raise OllamaError("Ollama returned neither content nor a tool call.")
+        return ChatResponse(content=content, model=self._model, tool_calls=tool_calls)

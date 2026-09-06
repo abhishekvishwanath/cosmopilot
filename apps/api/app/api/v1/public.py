@@ -1,14 +1,24 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents import concierge as concierge_agent
+from app.core.logging import log_with_fields
 from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.catalog import Doctor, Treatment
+from app.providers.llm.ollama import OllamaError
 from app.repositories import catalog as catalog_repo
 from app.repositories import clinics as clinics_repo
+from app.repositories import leads as leads_repo
 from app.repositories import visitor_sessions as visitor_sessions_repo
+from app.schemas.concierge import (
+    ConciergeMessageResponse,
+    PublicConciergeMessageRequest,
+    ToolCallRead,
+)
 from app.schemas.public import (
     PublicClinicRead,
     PublicDoctorRead,
@@ -21,6 +31,8 @@ from app.services import leads as leads_service
 from app.services import notifications as notifications_service
 from app.utils.slugify import slugify
 from app.utils.validation import has_min_digits
+
+logger = logging.getLogger("cosmopilot.public.concierge")
 
 # Unauthenticated by design — this is what the marketing site renders for
 # anonymous visitors (CLAUDE.md §28: minimal, rate-limited, never leaks
@@ -209,3 +221,58 @@ async def create_public_lead(
 
     await db.commit()
     return PublicLeadRead(id=lead.id, status=lead.status)
+
+
+# The web-chat AI Concierge — CLAUDE.md Phase 6. Requires an existing
+# lead_id (from a prior /public/leads submission) rather than starting
+# fully anonymous: Conversation.lead_id is NOT NULL by design (Phase 2),
+# and CLAUDE.md's own flow (§4) has "Lead Created" happen before "AI
+# Concierge <60 sec" contact — the concierge follows up on an enquiry,
+# it doesn't cold-open one. A generous-but-bounded limit (this is a real
+# conversation, not a one-shot form) protects the local LLM from abuse.
+@router.post(
+    "/concierge/messages",
+    response_model=ConciergeMessageResponse,
+    dependencies=[Depends(rate_limit(max_requests=20, window_seconds=600))],
+)
+async def send_public_concierge_message(
+    payload: PublicConciergeMessageRequest, db: Annotated[AsyncSession, Depends(get_db)]
+) -> ConciergeMessageResponse:
+    clinic = await clinics_repo.get_active_clinic(db)
+    if clinic is None:
+        raise _not_found("Clinic")
+
+    lead = await leads_repo.get_lead(db, clinic.id, payload.lead_id)
+    if lead is None:
+        raise _not_found("Lead")
+
+    try:
+        conversation = await concierge_agent.get_or_create_conversation(
+            db, clinic.id, lead.id, payload.conversation_id
+        )
+    except concierge_agent.ConversationMismatchError as exc:
+        raise _not_found(str(exc)) from exc
+
+    result = await concierge_agent.handle_turn(db, clinic, lead, conversation, payload.message)
+    await db.commit()
+
+    try:
+        await concierge_agent.summarize_conversation(db, conversation)
+        await db.commit()
+    except OllamaError:
+        log_with_fields(
+            logger,
+            logging.WARNING,
+            "summary_generation_failed",
+            conversation_id=str(conversation.id),
+        )
+
+    return ConciergeMessageResponse(
+        conversation_id=result.conversation_id,
+        reply=result.reply,
+        lead_status=result.lead_status,
+        tool_calls=[
+            ToolCallRead(name=t.name, arguments=t.arguments, result=t.result)
+            for t in result.tool_calls
+        ],
+    )

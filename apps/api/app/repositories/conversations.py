@@ -35,3 +35,45 @@ async def list_messages(db: AsyncSession, conversation_id: uuid.UUID) -> list[Me
         .order_by(Message.timestamp.asc())
     )
     return list(result.scalars().all())
+
+
+async def create_conversation(
+    db: AsyncSession, clinic_id: uuid.UUID, lead_id: uuid.UUID, channel: str
+) -> Conversation:
+    conversation = Conversation(
+        clinic_id=clinic_id, lead_id=lead_id, channel=channel, status="active"
+    )
+    db.add(conversation)
+    await db.flush()
+    return conversation
+
+
+async def update_conversation(
+    db: AsyncSession, conversation: Conversation, data: dict
+) -> Conversation:
+    for field, value in data.items():
+        setattr(conversation, field, value)
+    await db.flush()
+    return conversation
+
+
+async def create_message(
+    db: AsyncSession,
+    conversation_id: uuid.UUID,
+    direction: str,
+    sender_type: str,
+    content: str,
+    tool_name: str | None = None,
+    metadata: dict | None = None,
+) -> Message:
+    message = Message(
+        conversation_id=conversation_id,
+        direction=direction,
+        sender_type=sender_type,
+        content=content,
+        tool_name=tool_name,
+        message_metadata=metadata,
+    )
+    db.add(message)
+    await db.flush()
+    return message

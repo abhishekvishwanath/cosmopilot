@@ -18,6 +18,33 @@ export function getOrCreateAnonymousId(): string | null {
   }
 }
 
+const LEAD_ID_KEY = "cosmopilot_lead_id";
+
+// Set once a visitor's enquiry form succeeds (see appointment-form.tsx) —
+// the AI Concierge widget (concierge-launcher.tsx) reads this to decide
+// whether it has a lead to attach the conversation to. Conversations are
+// always tied to a lead (CLAUDE.md's data model — Conversation.lead_id is
+// required), so the concierge follows up on an enquiry rather than
+// cold-opening with a fully anonymous visitor.
+export function setStoredLeadId(leadId: string): void {
+  try {
+    window.localStorage.setItem(LEAD_ID_KEY, leadId);
+  } catch {
+    // Private browsing / storage blocked — the concierge just won't
+    // unlock this session; the form and WhatsApp still work.
+  }
+}
+
+export function getStoredLeadId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(LEAD_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+
 export interface Attribution {
   source: string | null;
   campaign: string | null;

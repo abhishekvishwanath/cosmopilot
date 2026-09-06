@@ -88,6 +88,32 @@ export interface PublicTreatment {
   booking_enabled: boolean;
 }
 
+export interface Conversation {
+  id: string;
+  clinic_id: string;
+  lead_id: string;
+  channel: string;
+  status: string;
+  summary: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConciergeToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+  result: Record<string, unknown>;
+}
+
+export interface ConciergeMessageResult {
+  conversation_id: string;
+  reply: string;
+  lead_status: string;
+  tool_calls: ConciergeToolCall[];
+}
+
 export interface KnowledgeDocument {
   id: string;
   clinic_id: string;

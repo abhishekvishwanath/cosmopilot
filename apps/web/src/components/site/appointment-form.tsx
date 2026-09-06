@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { ApiError, publicApiPost } from "@/lib/api";
-import { getAttribution, getOrCreateAnonymousId } from "@/lib/tracking";
+import { getAttribution, getOrCreateAnonymousId, setStoredLeadId } from "@/lib/tracking";
 import type { PublicLeadCreate, PublicLeadResult } from "@/lib/types";
 
 const CONTACT_METHODS = ["Call", "WhatsApp", "Email"] as const;
@@ -83,6 +83,7 @@ export function AppointmentForm({
 
     try {
       const created = await publicApiPost<PublicLeadResult>("/leads", payload);
+      setStoredLeadId(created.id);
       setResult(created);
     } catch (error) {
       setSubmitError(
@@ -100,8 +101,8 @@ export function AppointmentForm({
       <div className="rounded-2xl border border-gold bg-gold-soft/40 p-8 text-center">
         <h3 className="font-serif text-2xl text-charcoal">Thank you, {form.name.split(" ")[0]}.</h3>
         <p className="mt-2 text-sm text-charcoal-soft">
-          We&apos;ve got your enquiry. Our team (or your AI concierge, once it&apos;s connected)
-          will reach out shortly.
+          We&apos;ve got your enquiry. Our AI concierge — bottom right — can answer questions
+          right now, and our team will follow up shortly too.
         </p>
         <button
           type="button"

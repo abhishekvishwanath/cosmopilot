@@ -5,6 +5,7 @@ from app.api.v1 import (
     appointments,
     auth,
     clinics,
+    concierge,
     conversations,
     doctors,
     health,
@@ -26,6 +27,7 @@ api_router.include_router(appointments.router)
 api_router.include_router(conversations.router)
 api_router.include_router(analytics.router)
 api_router.include_router(knowledge.router)
+api_router.include_router(concierge.router)
 
 # integrations, webhooks (see docs/API_CONVENTIONS.md) are added starting
-# Phase 6+, once the underlying features exist.
+# Phase 8+, once the underlying features exist.

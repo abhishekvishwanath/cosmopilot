@@ -24,18 +24,15 @@ MIN_SIMILARITY = 0.45
 MAX_SEARCH_RESULTS = 4
 MAX_CONTEXT_CHARS = 2500
 
-# Empirically, llama3 (8B, the free local model this prototype uses)
-# answers correctly and consistently when given exactly one retrieved
-# chunk, but reliably REFUSES ("I don't have approved information") once a
-# second chunk is added — reproduced across chunk ordering, formatting,
-# and multiple runs at temperature=0, so it isn't noise or a wording
-# artifact. That's a real capability limit of a small local model doing
-# multi-passage synthesis, not something worth chasing with more prompt
-# engineering. The safe fix is to ground on the single best match rather
-# than risk an unreliable answer — a larger/paid model (see
-# docs/PROVIDER_INTERFACES.md) would likely handle multi-chunk context
-# fine, at which point this can go back up.
-MAX_LLM_CONTEXT_CHUNKS = 1
+# Phase 5 originally shipped with llama3 (8B) and this capped at 1 — that
+# model reliably REFUSED once a second chunk was added to context (see git
+# history), even when the answer was clearly present. Phase 6 switched the
+# default Ollama model to qwen2.5:7b (llama3 doesn't support tool calling
+# at all, which the AI Concierge needs) — re-tested and qwen2.5 handles
+# multi-chunk context correctly, so this goes back up to match
+# MAX_SEARCH_RESULTS. If a future model regresses on this, re-verify
+# empirically before assuming this constant is still safe.
+MAX_LLM_CONTEXT_CHUNKS = MAX_SEARCH_RESULTS
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are the approved-knowledge assistant for {clinic_name}, a cosmetic dental clinic. "

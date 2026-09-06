@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ConciergeTestConsole } from "@/components/concierge-test-console";
 import { LeadStatusControl } from "@/components/lead-status-control";
 import { StatusBadge } from "@/components/status-badge";
 import { apiFetch, ApiError } from "@/lib/api";
 import { requireSession } from "@/lib/auth";
-import type { Appointment, Lead, TimelineEvent } from "@/lib/types";
+import type { Appointment, Conversation, Lead, TimelineEvent } from "@/lib/types";
 
 export default async function LeadDetailPage({
   params,
@@ -23,10 +24,12 @@ export default async function LeadDetailPage({
     throw err;
   }
 
-  const [timeline, appointments] = await Promise.all([
+  const [timeline, appointments, conversations] = await Promise.all([
     apiFetch<TimelineEvent[]>(`/leads/${id}/timeline`, accessToken),
     apiFetch<Appointment[]>(`/appointments?lead_id=${id}`, accessToken),
+    apiFetch<Conversation[]>(`/conversations?lead_id=${id}`, accessToken),
   ]);
+  const latestConversation = conversations[0] ?? null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -97,6 +100,19 @@ export default async function LeadDetailPage({
           </ol>
         </div>
       </div>
+
+      {latestConversation?.summary && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+          <h2 className="text-sm font-medium text-black dark:text-zinc-50">
+            Conversation summary
+          </h2>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            {latestConversation.summary}
+          </p>
+        </div>
+      )}
+
+      <ConciergeTestConsole leadId={lead.id} />
     </div>
   );
 }
